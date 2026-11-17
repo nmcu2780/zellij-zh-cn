@@ -1,0 +1,120 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhcn <zhcn@local>
+Date: Tue, 17 Nov 2026 13:13:15 +0800
+Subject: [PATCH 07/19] i18n: translate mode label, wide Alt hints and
+ context-menu labels
+
+---
+ Cargo.lock                                    |  1 +
+ default-plugins/bars/src/compact_bar/line.rs  |  2 +-
+ default-plugins/bars/src/mode_hints.rs        | 20 ++++++++++++++++++-
+ .../bars/src/status_bar/one_line_ui.rs        |  4 ++--
+ default-plugins/context-menu/Cargo.toml       |  1 +
+ default-plugins/context-menu/src/main.rs      |  3 ++-
+ 6 files changed, 26 insertions(+), 5 deletions(-)
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 2cad019..27f2b1e 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -888,6 +888,7 @@ dependencies = [
+ name = "context-menu"
+ version = "0.1.0"
+ dependencies = [
++ "zellij-i18n",
+  "zellij-tile",
+  "zellij-utils",
+ ]
+diff --git a/default-plugins/bars/src/compact_bar/line.rs b/default-plugins/bars/src/compact_bar/line.rs
+index d6582a0..a6ab72b 100644
+--- a/default-plugins/bars/src/compact_bar/line.rs
++++ b/default-plugins/bars/src/compact_bar/line.rs
+@@ -509,7 +509,7 @@ impl<'a> TabLinePrefixBuilder<'a> {
+     }
+ 
+     fn create_mode_part(&self, mode: InputMode, used_len: usize) -> Option<LinePart> {
+-        let mode_text = format!(" {} ", format!("{:?}", mode).to_uppercase());
++        let mode_text = format!(" {} ", crate::mode_hints::mode_label(mode));
+         let mode_len = display_width(&mode_text);
+ 
+         if self.cols.saturating_sub(used_len) >= mode_len {
+diff --git a/default-plugins/bars/src/mode_hints.rs b/default-plugins/bars/src/mode_hints.rs
+index faa87c1..8e20d73 100644
+--- a/default-plugins/bars/src/mode_hints.rs
++++ b/default-plugins/bars/src/mode_hints.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::compact_bar::tooltip::TooltipRenderer;
+ use crate::keybinds::KeybindStore;
+ use std::collections::{BTreeMap, BTreeSet};
+@@ -12,7 +13,24 @@ pub struct ModeHints {
+ }
+ 
+ pub fn mode_label(mode: InputMode) -> String {
+-    format!("{:?}", mode).to_uppercase()
++    match mode {
++        InputMode::Normal => tr("NORMAL"),
++        InputMode::Locked => tr("LOCKED"),
++        InputMode::Resize => tr("RESIZE"),
++        InputMode::Pane => tr("PANE"),
++        InputMode::Tab => tr("TAB"),
++        InputMode::Scroll => tr("SCROLL"),
++        InputMode::EnterSearch => tr("ENTER SEARCH"),
++        InputMode::Search => tr("SEARCH"),
++        InputMode::RenameTab => tr("RENAME TAB"),
++        InputMode::RenamePane => tr("RENAME PANE"),
++        InputMode::RenameSession => tr("RENAME SESSION"),
++        InputMode::Session => tr("SESSION"),
++        InputMode::Move => tr("MOVE"),
++        InputMode::Prompt => tr("PROMPT"),
++        InputMode::Tmux => "TMUX",
++    }
++    .to_owned()
+ }
+ 
+ fn content_size(mode_info: &ModeInfo) -> (usize, usize) {
+diff --git a/default-plugins/bars/src/status_bar/one_line_ui.rs b/default-plugins/bars/src/status_bar/one_line_ui.rs
+index 8f7621b..5eca2b3 100644
+--- a/default-plugins/bars/src/status_bar/one_line_ui.rs
++++ b/default-plugins/bars/src/status_bar/one_line_ui.rs
+@@ -1057,11 +1057,11 @@ fn secondary_keybinds(help: &ModeInfo, tab_info: Option<&TabInfo>, max_len: usiz
+         line
+     };
+ 
+-    let secondary_info = hint_line("New Pane", "Change Focus");
++    let secondary_info = hint_line(tr("New Pane"), tr("Change Focus"));
+     if secondary_info.len <= max_len {
+         return secondary_info;
+     }
+-    let short_line = hint_line("New", "Focus");
++    let short_line = hint_line(tr("New"), tr("Focus"));
+     if short_line.len <= max_len {
+         short_line
+     } else if max_len >= 3 {
+diff --git a/default-plugins/context-menu/Cargo.toml b/default-plugins/context-menu/Cargo.toml
+index b999725..985ccd5 100644
+--- a/default-plugins/context-menu/Cargo.toml
++++ b/default-plugins/context-menu/Cargo.toml
+@@ -8,3 +8,4 @@ license.workspace = true
+ [dependencies]
+ zellij-tile = { path = "../../zellij-tile" }
+ zellij-utils = { workspace = true }
++zellij-i18n.workspace = true
+diff --git a/default-plugins/context-menu/src/main.rs b/default-plugins/context-menu/src/main.rs
+index a00ff96..5350723 100644
+--- a/default-plugins/context-menu/src/main.rs
++++ b/default-plugins/context-menu/src/main.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr_dyn;
+ use std::collections::BTreeMap;
+ use zellij_tile::prelude::*;
+ use zellij_utils::input::context_menu::context_menu_shortcut;
+@@ -111,7 +112,7 @@ impl ContextMenuPlugin {
+                     if state == ItemState::Hidden {
+                         continue;
+                     }
+-                    let mut item = MenuItem::new(label.clone());
++                    let mut item = MenuItem::new(tr_dyn(&label));
+                     let pastes = actions.iter().any(|action| {
+                         matches!(
+                             action,

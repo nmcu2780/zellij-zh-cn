@@ -1,0 +1,239 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhcn <zhcn@local>
+Date: Mon, 16 Nov 2026 14:45:54 +0800
+Subject: [PATCH 02/19] i18n: translate web login/reconnect modals and
+ auth/connection errors
+
+---
+ zellij-client/assets/auth.js       | 16 ++++----
+ zellij-client/assets/connection.js |  4 +-
+ zellij-client/assets/modals.js     | 62 +++++++++++++++++-------------
+ zellij-client/assets/utils.js      | 21 ++++++++++
+ 4 files changed, 66 insertions(+), 37 deletions(-)
+
+diff --git a/zellij-client/assets/auth.js b/zellij-client/assets/auth.js
+index cfd660a..f3afb2b 100644
+--- a/zellij-client/assets/auth.js
++++ b/zellij-client/assets/auth.js
+@@ -2,7 +2,7 @@
+  * Authentication logic and token management
+  */
+ 
+-import { getBaseUrl } from "./utils.js";
++import { getBaseUrl, t } from "./utils.js";
+ 
+ /**
+  * Wait for user to provide a security token
+@@ -19,8 +19,8 @@ async function waitForSecurityToken() {
+             remember = result.remember;
+         } else {
+             await showErrorModal(
+-                "Error",
+-                "Must provide security token in order to log in."
++                t("Error"),
++                t("Must provide security token in order to log in.")
+             );
+         }
+     }
+@@ -49,12 +49,12 @@ async function login(token, rememberMe) {
+     });
+ 
+     if (login_res.status === 401) {
+-        await showErrorModal("Error", "Unauthorized or revoked login token.");
++        await showErrorModal(t("Error"), t("Unauthorized or revoked login token."));
+         return false;
+     } else if (!login_res.ok) {
+         await showErrorModal(
+-            "Error",
+-            `Error ${login_res.status} connecting to server.`
++            t("Error"),
++            t("Error {status} connecting to server.", { status: login_res.status })
+         );
+         return false;
+     }
+@@ -113,8 +113,8 @@ export async function authorizedFetch(url, options = {}) {
+ 
+         if (response.status !== 401) {
+             await showErrorModal(
+-                "Error",
+-                `Error ${response.status} connecting to server.`
++                t("Error"),
++                t("Error {status} connecting to server.", { status: response.status })
+             );
+         }
+ 
+diff --git a/zellij-client/assets/connection.js b/zellij-client/assets/connection.js
+index c8eee56..cb2ec9c 100644
+--- a/zellij-client/assets/connection.js
++++ b/zellij-client/assets/connection.js
+@@ -2,7 +2,7 @@
+  * Connection-related utility functions and management
+  */
+ 
+-import { getBaseUrl } from "./utils.js";
++import { getBaseUrl, t } from "./utils.js";
+ 
+ // Connection state
+ let reconnectionAttempt = 0;
+@@ -48,7 +48,7 @@ export async function handleDisconnected() {
+         return;
+     }
+     isDisconnected = true;
+-    await showErrorModal("Disconnected", "You have been disconnected by the host.");
++    await showErrorModal(t("Disconnected"), t("You have been disconnected by the host."));
+     isDisconnected = false;
+ }
+ 
+diff --git a/zellij-client/assets/modals.js b/zellij-client/assets/modals.js
+index 348859b..0abf0d4 100644
+--- a/zellij-client/assets/modals.js
++++ b/zellij-client/assets/modals.js
+@@ -1,3 +1,16 @@
++function t(en, params) {
++  if (window.zellijI18n) {
++    return window.zellijI18n.t(en, params);
++  }
++  var s = en;
++  if (params) {
++    for (var name in params) {
++      s = s.split("{" + name + "}").join(String(params[name]));
++    }
++  }
++  return s;
++}
++
+ function createModalStyles() {
+   if (document.querySelector('#modal-styles')) return;
+   
+@@ -347,15 +360,15 @@ function getSecurityToken() {
+     
+     modal.innerHTML = `
+       <div class="security-modal-content">
+-        <h3>Security Token Required</h3>
+-        <input type="password" id="token" placeholder="Enter your security token">
++        <h3>${t("Security Token Required")}</h3>
++        <input type="password" id="token" placeholder="${t("Enter your security token")}">
+         <label>
+           <input type="checkbox" id="remember">
+-          Remember me
++          ${t("Remember me")}
+         </label>
+         <div class="button-row">
+-          <button id="cancel" class="cancel-btn">Cancel</button>
+-          <button id="submit" class="submit-btn">Authenticate</button>
++          <button id="cancel" class="cancel-btn">${t("Cancel")}</button>
++          <button id="submit" class="submit-btn">${t("Authenticate")}</button>
+         </div>
+         <div class="status-bar"></div>
+       </div>
+@@ -429,7 +442,7 @@ function showErrorModal(title, description) {
+     const dismissBtn = document.createElement('button');
+     dismissBtn.id = 'dismiss';
+     dismissBtn.className = 'dismiss-btn';
+-    dismissBtn.textContent = 'Acknowledge';
++    dismissBtn.textContent = t('Acknowledge');
+     buttonRow.appendChild(dismissBtn);
+     content.appendChild(buttonRow);
+ 
+@@ -476,7 +489,7 @@ function showReconnectionModal(attemptNumber, delaySeconds) {
+     modal.style.background = 'rgba(28, 28, 28, 0.85)'; // More transparent to show terminal
+     
+     const isFirstAttempt = attemptNumber === 1;
+-    const titleText = isFirstAttempt ? 'Connection Lost' : 'Reconnection Failed';
++    const titleText = isFirstAttempt ? t('Connection Lost') : t('Reconnection Failed');
+ 
+     const contentDiv = document.createElement('div');
+     contentDiv.className = 'security-modal-content';
+@@ -490,23 +503,18 @@ function showReconnectionModal(attemptNumber, delaySeconds) {
+     messageEl.className = 'error-description';
+     messageEl.id = 'modal-message';
+ 
+-    if (isFirstAttempt) {
+-        messageEl.appendChild(document.createTextNode('Reconnecting in '));
+-        const countdown = document.createElement('span');
+-        countdown.id = 'countdown';
+-        countdown.textContent = delaySeconds;
+-        messageEl.appendChild(countdown);
+-        messageEl.appendChild(document.createTextNode(delaySeconds > 1 ? ' seconds...' : ' second...'));
+-    } else {
+-        messageEl.appendChild(document.createTextNode('Retrying in '));
+-        const countdown = document.createElement('span');
+-        countdown.id = 'countdown';
+-        countdown.textContent = delaySeconds;
+-        messageEl.appendChild(countdown);
+-        messageEl.appendChild(document.createTextNode(
+-            (delaySeconds > 1 ? ' seconds' : ' second') + '... (Attempt ' + attemptNumber + ')'
+-        ));
+-    }
++    const messageTemplate = isFirstAttempt
++        ? t(delaySeconds > 1 ? 'Reconnecting in {seconds} seconds...' : 'Reconnecting in {seconds} second...')
++        : t(delaySeconds > 1 ? 'Retrying in {seconds} seconds... (Attempt {attempt})' : 'Retrying in {seconds} second... (Attempt {attempt})');
++    const templateParts = messageTemplate.split('{seconds}');
++    const countdownPrefix = templateParts[0];
++    const countdownSuffix = templateParts.slice(1).join('{seconds}').replace('{attempt}', attemptNumber);
++    messageEl.appendChild(document.createTextNode(countdownPrefix));
++    const countdown = document.createElement('span');
++    countdown.id = 'countdown';
++    countdown.textContent = delaySeconds;
++    messageEl.appendChild(countdown);
++    messageEl.appendChild(document.createTextNode(countdownSuffix));
+     contentDiv.appendChild(messageEl);
+ 
+     const buttonRowEl = document.createElement('div');
+@@ -516,13 +524,13 @@ function showReconnectionModal(attemptNumber, delaySeconds) {
+     const cancelBtn = document.createElement('button');
+     cancelBtn.id = 'cancel';
+     cancelBtn.className = 'cancel-btn';
+-    cancelBtn.textContent = 'Cancel';
++    cancelBtn.textContent = t('Cancel');
+     buttonRowEl.appendChild(cancelBtn);
+ 
+     const reconnectBtn = document.createElement('button');
+     reconnectBtn.id = 'reconnect';
+     reconnectBtn.className = 'submit-btn';
+-    reconnectBtn.textContent = 'Reconnect Now';
++    reconnectBtn.textContent = t('Reconnect Now');
+     buttonRowEl.appendChild(reconnectBtn);
+ 
+     contentDiv.appendChild(buttonRowEl);
+@@ -560,7 +568,7 @@ function showReconnectionModal(attemptNumber, delaySeconds) {
+       }
+       
+       const messageElement = modal.querySelector('#modal-message');
+-      messageElement.textContent = 'Connecting...';
++      messageElement.textContent = t('Connecting...');
+     };
+     
+     countdownInterval = setInterval(updateCountdown, 1000);
+diff --git a/zellij-client/assets/utils.js b/zellij-client/assets/utils.js
+index 49a2f71..8efd8a4 100644
+--- a/zellij-client/assets/utils.js
++++ b/zellij-client/assets/utils.js
+@@ -2,6 +2,27 @@
+  * Utility functions for the terminal web client
+  */
+ 
++/**
++ * Translate an English UI string through window.zellijI18n (loaded from
++ * assets/i18n.js). Falls back to the English text when the catalog is absent.
++ * Named `{name}` placeholders are replaced from `params`.
++ * @param {string} en - English original, used as the catalog key
++ * @param {Object} [params] - values for `{name}` placeholders
++ * @returns {string} localized text
++ */
++export function t(en, params) {
++    if (window.zellijI18n) {
++        return window.zellijI18n.t(en, params);
++    }
++    let s = en;
++    if (params) {
++        for (const name in params) {
++            s = s.split(`{${name}}`).join(String(params[name]));
++        }
++    }
++    return s;
++}
++
+ /**
+  * Check if the current page is served over HTTPS
+  * @returns {boolean} true if protocol is https:, false otherwise

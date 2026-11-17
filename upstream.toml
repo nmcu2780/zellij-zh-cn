@@ -1,0 +1,6 @@
+[upstream]
+repo = "https://github.com/zellij-org/zellij"
+version = "0.46.0"
+tag = "v0.46.0"
+commit = "aedee21cb0d58d716496e7f6c66ba0b6f08045d8"
+patches = "patches/v0.46.0"

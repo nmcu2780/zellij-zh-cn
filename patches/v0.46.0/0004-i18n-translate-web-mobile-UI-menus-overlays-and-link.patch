@@ -1,0 +1,251 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhcn <zhcn@local>
+Date: Mon, 16 Nov 2026 15:29:23 +0800
+Subject: [PATCH 04/19] i18n: translate web mobile UI menus, overlays and link
+ popup
+
+---
+ zellij-client/assets/links.js     |  2 +-
+ zellij-client/assets/mobile-ui.js | 68 +++++++++++++++----------------
+ 2 files changed, 35 insertions(+), 35 deletions(-)
+
+diff --git a/zellij-client/assets/links.js b/zellij-client/assets/links.js
+index f2438eb..5d78c05 100644
+--- a/zellij-client/assets/links.js
++++ b/zellij-client/assets/links.js
+@@ -31,7 +31,7 @@ export function build_link_handler() {
+         popup.style.borderRadius = '6px';
+         popup.style.background = '#6c4c4c';
+         popup.style.borderColor = '#150262';
+-        popup.innerText = "Shift-Click: " + text;
++        popup.innerText = (window.zellijI18n ? window.zellijI18n.t("Shift-Click: ") : "Shift-Click: ") + text;
+         const topElement = event.target.parentNode;
+         topElement.appendChild(popup);
+         const popupHeight = popup.offsetHeight;
+diff --git a/zellij-client/assets/mobile-ui.js b/zellij-client/assets/mobile-ui.js
+index 856b656..1e9f8cc 100644
+--- a/zellij-client/assets/mobile-ui.js
++++ b/zellij-client/assets/mobile-ui.js
+@@ -1,4 +1,4 @@
+-import { isMobileViewport, getBaseUrl } from "./utils.js";
++import { isMobileViewport, getBaseUrl, t } from "./utils.js";
+ 
+ const DARK_PALETTE = {
+     "--zj-green": "#A3BD8D",
+@@ -544,7 +544,7 @@ function buildDom() {
+     const returnPill = document.createElement("button");
+     returnPill.id = "zj-mobile-return";
+     returnPill.className = "zj-mobile-return";
+-    returnPill.textContent = "\u2630 Mobile UI";
++    returnPill.textContent = "\u2630 " + t("Mobile UI");
+     returnPill.addEventListener("click", returnToMobileUi);
+     document.body.appendChild(returnPill);
+ 
+@@ -604,18 +604,18 @@ function buildMenu() {
+     });
+ 
+     const changePane = document.createElement("button");
+-    changePane.textContent = "Change Pane";
++    changePane.textContent = t("Change Pane");
+     changePane.addEventListener("click", () => openOverlay("panes"));
+ 
+     const changeSession = document.createElement("button");
+-    changeSession.textContent = "Change Session";
++    changeSession.textContent = t("Change Session");
+     changeSession.addEventListener("click", () => openOverlay("sessions"));
+ 
+     const sep = document.createElement("div");
+     sep.className = "zj-sep";
+ 
+     const switchDesktop = document.createElement("button");
+-    switchDesktop.textContent = "Switch to Desktop";
++    switchDesktop.textContent = t("Switch to Desktop");
+     switchDesktop.addEventListener("click", switchToDesktop);
+ 
+     menu.append(
+@@ -664,13 +664,13 @@ function buildSwitcherOverlay(kind) {
+     header.className = "zj-mobile-overlay-header";
+     const back = document.createElement("button");
+     back.className = "zj-back";
+-    back.textContent = "\u2190 BACK";
++    back.textContent = "\u2190 " + t("BACK");
+     back.addEventListener("click", closeOverlay);
+     const title = document.createElement("div");
+     title.className = "zj-title";
+     header.append(back, title);
+ 
+-    const label = kind === "panes" ? "Pane:" : "Session:";
++    const label = kind === "panes" ? t("Pane:") : t("Session:");
+     const searchRow = document.createElement("div");
+     searchRow.className = "zj-mobile-search-row";
+     const searchLabel = document.createElement("div");
+@@ -703,33 +703,33 @@ function buildNewSessionOverlay() {
+     header.className = "zj-mobile-overlay-header";
+     const title = document.createElement("div");
+     title.className = "zj-title";
+-    title.textContent = "New Session";
++    title.textContent = t("New Session");
+     header.append(title);
+ 
+     const nameRow = document.createElement("div");
+     nameRow.className = "zj-mobile-search-row";
+     const nameLabel = document.createElement("div");
+     nameLabel.className = "zj-search-label";
+-    nameLabel.textContent = "Name:";
++    nameLabel.textContent = t("Name:");
+     const name = document.createElement("input");
+     name.className = "zj-name";
+     name.type = "text";
+-    name.setAttribute("aria-label", "Name");
++    name.setAttribute("aria-label", t("Name"));
+     nameRow.append(nameLabel, name);
+ 
+     const hint = document.createElement("div");
+     hint.className = "zj-mobile-hint";
+-    hint.textContent = "Leave empty for a randomly generated name";
++    hint.textContent = t("Leave empty for a randomly generated name");
+ 
+     const buttons = document.createElement("div");
+     buttons.className = "zj-mobile-prompt-buttons";
+     const cancel = document.createElement("button");
+     cancel.className = "zj-cancel";
+-    cancel.textContent = "Cancel";
++    cancel.textContent = t("Cancel");
+     cancel.addEventListener("click", () => openOverlay("sessions"));
+     const accept = document.createElement("button");
+     accept.className = "zj-accept";
+-    accept.textContent = "Accept";
++    accept.textContent = t("Accept");
+     accept.addEventListener("click", () => {
+         navigateToSession(name.value.trim());
+     });
+@@ -1035,7 +1035,7 @@ function render() {
+     // mode - hiding it in full render leaves the user with no way back.
+     els.topbar.style.display = "flex";
+ 
+-    els.sessionBtn.textContent = state.data.session_name || "session";
++    els.sessionBtn.textContent = state.data.session_name || t("session");
+     els.paneBtn.textContent = activePaneLabel();
+ 
+     renderMenu();
+@@ -1077,17 +1077,17 @@ function renderMenu() {
+     const renderToggle = els.menu.querySelector('[data-role="render-toggle"]');
+     renderToggle.textContent = `${checkbox(
+         state.renderMode === "single-pane"
+-    )} Single pane`;
++    )} ${t("Single pane")}`;
+ 
+     const fitToggle = els.menu.querySelector('[data-role="fit-toggle"]');
+     const canFit = state.data.desktop_client_connected;
+-    fitToggle.textContent = `${checkbox(state.fitEnabled)} Fit to my screen`;
++    fitToggle.textContent = `${checkbox(state.fitEnabled)} ${t("Fit to my screen")}`;
+     fitToggle.classList.toggle("zj-disabled", !canFit);
+ 
+     const themeToggle = els.menu.querySelector('[data-role="theme-toggle"]');
+     themeToggle.textContent = `${checkbox(
+         effectiveTheme() === "light"
+-    )} Light mode`;
++    )} ${t("Light mode")}`;
+ }
+ 
+ function renderModifierBar() {
+@@ -1110,7 +1110,7 @@ function renderOverlays() {
+     if (state.activeOverlay === "panes") {
+         setupPanesFooter();
+         renderCards("panes");
+-        els.panes._parts.title.textContent = "Switch Pane";
++        els.panes._parts.title.textContent = t("Switch Pane");
+     } else if (state.activeOverlay === "sessions") {
+         setupSessionsFooter();
+         renderSessionsHeader();
+@@ -1125,7 +1125,7 @@ function camel(kind) {
+ function renderSessionsHeader() {
+     const parts = els.sessions._parts;
+     const welcome = state.data.is_welcome_screen;
+-    parts.title.textContent = welcome ? "Hi from Zellij!" : "Switch Session";
++    parts.title.textContent = welcome ? t("Hi from Zellij!") : t("Switch Session");
+     parts.back.style.display = welcome ? "none" : "";
+ }
+ 
+@@ -1133,7 +1133,7 @@ function setupPanesFooter() {
+     const footer = els.panes._parts.footer;
+     footer.innerHTML = "";
+     const newTab = document.createElement("button");
+-    newTab.textContent = "+ New Tab";
++    newTab.textContent = "+ " + t("New Tab");
+     newTab.addEventListener("click", () => {
+         sendControl({ type: "NewTab" });
+         closeOverlay();
+@@ -1142,7 +1142,7 @@ function setupPanesFooter() {
+     const active = state.data.active_pane;
+     if (active && active.tab_position != null) {
+         const newPane = document.createElement("button");
+-        newPane.textContent = "+ New Pane";
++        newPane.textContent = "+ " + t("New Pane");
+         newPane.addEventListener("click", () => {
+             sendControl({
+                 type: "NewPaneInTab",
+@@ -1158,7 +1158,7 @@ function setupSessionsFooter() {
+     const footer = els.sessions._parts.footer;
+     footer.innerHTML = "";
+     const newSession = document.createElement("button");
+-    newSession.textContent = "+ New Session";
++    newSession.textContent = "+ " + t("New Session");
+     newSession.addEventListener("click", () => openOverlay("new-session"));
+     footer.append(newSession);
+ }
+@@ -1178,10 +1178,10 @@ function renderCards(kind) {
+         const empty = document.createElement("div");
+         empty.className = "zj-mobile-empty";
+         empty.textContent = query
+-            ? "No matches"
++            ? t("No matches")
+             : kind === "sessions"
+-              ? "No other sessions"
+-              : "No panes";
++              ? t("No other sessions")
++              : t("No panes");
+         parts.cards.appendChild(empty);
+     }
+ }
+@@ -1201,8 +1201,8 @@ function paneCardData() {
+             active.is_plugin === p.is_plugin;
+         const tabName = tabsByPos[p.tab_position] || "";
+         const activity = isCurrent
+-            ? "[CURRENT PANE]"
+-            : `Active ${formatActivity(p.last_activity_secs_ago, now)}`;
++            ? `[${t("CURRENT PANE")}]`
++            : t("Active {activity}", { activity: formatActivity(p.last_activity_secs_ago, now) });
+         return {
+             searchText: title,
+             title,
+@@ -1226,10 +1226,10 @@ function sessionCardData() {
+                 s.creation_secs_ago != null
+                     ? s.creation_secs_ago + (now - base)
+                     : null;
+-            const counts = `${s.tab_count} tabs, ${s.pane_count} panes, ${s.connected_clients} client(s)`;
++            const counts = t("{tabs} tabs, {panes} panes, {clients} client(s)", { tabs: s.tab_count, panes: s.pane_count, clients: s.connected_clients });
+             const created =
+                 createdSecsAgo != null
+-                    ? `Created ${formatActivity(createdSecsAgo, now)}`
++                    ? t("Created {activity}", { activity: formatActivity(createdSecsAgo, now) })
+                     : "";
+             return {
+                 searchText: s.name,
+@@ -1354,11 +1354,11 @@ function formatActivity(secsAgo, now) {
+         return "\u2014";
+     }
+     const diff = secsAgo;
+-    if (diff < 5) return "just now";
+-    if (diff < 60) return `${diff}s ago`;
+-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+-    return `${Math.floor(diff / 86400)}d ago`;
++    if (diff < 5) return t("just now");
++    if (diff < 60) return t("{n}s ago", { n: diff });
++    if (diff < 3600) return t("{n}m ago", { n: Math.floor(diff / 60) });
++    if (diff < 86400) return t("{n}h ago", { n: Math.floor(diff / 3600) });
++    return t("{n}d ago", { n: Math.floor(diff / 86400) });
+ }
+ 
+ function startActivityTimer() {

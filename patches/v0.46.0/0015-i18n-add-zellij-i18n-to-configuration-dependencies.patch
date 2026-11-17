@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 14:41:14 +0800
+Subject: [PATCH 15/19] i18n: add zellij-i18n to configuration dependencies
+
+---
+ Cargo.lock | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 473f3e0..438c1b9 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -7,6 +7,7 @@ name = "about"
+ version = "0.1.0"
+ dependencies = [
+  "rand 0.10.2",
++ "zellij-i18n",
+  "zellij-tile",
+ ]
+ 
+@@ -854,6 +855,7 @@ name = "configuration"
+ version = "0.1.0"
+ dependencies = [
+  "kdl",
++ "zellij-i18n",
+  "zellij-tile",
+  "zellij-utils",
+ ]
+@@ -2529,6 +2531,7 @@ dependencies = [
+  "miette 7.6.0",
+  "strip-ansi-escapes",
+  "unicode-width 0.2.2",
++ "zellij-i18n",
+  "zellij-tile",
+ ]
+ 
+@@ -3656,6 +3659,7 @@ version = "0.1.0"
+ dependencies = [
+  "fuzzy-matcher",
+  "uuid",
++ "zellij-i18n",
+  "zellij-tile",
+ ]
+ 

@@ -1,0 +1,395 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhcn <zhcn@local>
+Date: Mon, 16 Nov 2026 15:29:58 +0800
+Subject: [PATCH 06/19] i18n: translate compact bar, tab bar, session indicator
+ and link plugin
+
+---
+ .../bars/src/compact_bar/action_types.rs      | 85 ++++++++++---------
+ .../bars/src/compact_bar/clipboard_utils.rs   | 11 +--
+ default-plugins/bars/src/compact_bar/line.rs  | 13 +--
+ default-plugins/bars/src/compact_bar/mod.rs   |  3 +-
+ .../bars/src/compact_bar/tooltip.rs           |  9 +-
+ default-plugins/bars/src/link/mod.rs          |  8 +-
+ default-plugins/bars/src/main.rs              |  3 +-
+ default-plugins/bars/src/session_indicator.rs | 19 +++--
+ default-plugins/bars/src/tab_bar/mod.rs       |  3 +-
+ 9 files changed, 80 insertions(+), 74 deletions(-)
+
+diff --git a/default-plugins/bars/src/compact_bar/action_types.rs b/default-plugins/bars/src/compact_bar/action_types.rs
+index 5bf9acf..9a99e0e 100644
+--- a/default-plugins/bars/src/compact_bar/action_types.rs
++++ b/default-plugins/bars/src/compact_bar/action_types.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use zellij_tile::prelude::actions::Action;
+ use zellij_tile::prelude::*;
+ 
+@@ -45,63 +46,63 @@ pub enum ActionType {
+ impl ActionType {
+     pub fn description(&self) -> String {
+         match self {
+-            ActionType::MoveFocus => "Move focus".to_string(),
+-            ActionType::MovePaneWithDirection => "Move pane".to_string(),
+-            ActionType::MovePaneWithoutDirection => "Move pane".to_string(),
+-            ActionType::ResizeIncrease => "Increase size in direction".to_string(),
+-            ActionType::ResizeDecrease => "Decrease size in direction".to_string(),
+-            ActionType::ResizeAny => "Increase or decrease size".to_string(),
+-            ActionType::Search => "Search".to_string(),
+-            ActionType::NewPaneWithDirection => "Split right/down".to_string(),
+-            ActionType::NewPaneWithoutDirection => "New pane".to_string(),
+-            ActionType::BreakPaneLeftOrRight => "Break pane to adjacent tab".to_string(),
+-            ActionType::GoToAdjacentTab => "Move tab focus".to_string(),
+-            ActionType::Scroll => "Scroll".to_string(),
+-            ActionType::PageScroll => "Scroll page".to_string(),
+-            ActionType::HalfPageScroll => "Scroll half Page".to_string(),
+-            ActionType::SessionManager => "Session manager".to_string(),
+-            ActionType::PluginManager => "Plugin manager".to_string(),
+-            ActionType::Configuration => "Settings".to_string(),
+-            ActionType::About => "About Zellij".to_string(),
++            ActionType::MoveFocus => tr("Move focus").to_string(),
++            ActionType::MovePaneWithDirection => tr("Move pane").to_string(),
++            ActionType::MovePaneWithoutDirection => tr("Move pane").to_string(),
++            ActionType::ResizeIncrease => tr("Increase size in direction").to_string(),
++            ActionType::ResizeDecrease => tr("Decrease size in direction").to_string(),
++            ActionType::ResizeAny => tr("Increase or decrease size").to_string(),
++            ActionType::Search => tr("Search").to_string(),
++            ActionType::NewPaneWithDirection => tr("Split right/down").to_string(),
++            ActionType::NewPaneWithoutDirection => tr("New pane").to_string(),
++            ActionType::BreakPaneLeftOrRight => tr("Break pane to adjacent tab").to_string(),
++            ActionType::GoToAdjacentTab => tr("Move tab focus").to_string(),
++            ActionType::Scroll => tr("Scroll").to_string(),
++            ActionType::PageScroll => tr("Scroll page").to_string(),
++            ActionType::HalfPageScroll => tr("Scroll half Page").to_string(),
++            ActionType::SessionManager => tr("Session manager").to_string(),
++            ActionType::PluginManager => tr("Plugin manager").to_string(),
++            ActionType::Configuration => tr("Settings").to_string(),
++            ActionType::About => tr("About Zellij").to_string(),
+             ActionType::SwitchToMode(input_mode) if input_mode == &InputMode::RenamePane => {
+-                "Rename pane".to_string()
++                tr("Rename pane").to_string()
+             },
+             ActionType::SwitchToMode(input_mode) if input_mode == &InputMode::RenameTab => {
+-                "Rename tab".to_string()
++                tr("Rename tab").to_string()
+             },
+             ActionType::SwitchToMode(input_mode) if input_mode == &InputMode::RenameSession => {
+-                "Rename session".to_string()
++                tr("Rename session").to_string()
+             },
+             ActionType::SwitchToMode(input_mode) if input_mode == &InputMode::EnterSearch => {
+-                "Search".to_string()
++                tr("Search").to_string()
+             },
+             ActionType::SwitchToMode(input_mode) if input_mode == &InputMode::Locked => {
+-                "Lock".to_string()
++                tr("Lock").to_string()
+             },
+             ActionType::SwitchToMode(input_mode) if input_mode == &InputMode::Normal => {
+-                "Unlock".to_string()
++                tr("Unlock").to_string()
+             },
+             ActionType::SwitchToMode(input_mode) => format!("{:?}", input_mode),
+-            ActionType::TogglePaneEmbedOrFloating => "Float or embed".to_string(),
+-            ActionType::NewStackedPane => "New stacked pane".to_string(),
+-            ActionType::ToggleFocusFullscreen => "Toggle fullscreen".to_string(),
+-            ActionType::ToggleFloatingPanes => "Show/hide floating panes".to_string(),
+-            ActionType::CloseFocus => "Close pane".to_string(),
+-            ActionType::CloseTab => "Close tab".to_string(),
+-            ActionType::ToggleActiveSyncTab => "Sync panes in tab".to_string(),
+-            ActionType::ToggleTab => "Circle tab focus".to_string(),
+-            ActionType::BreakPane => "Break pane to new tab".to_string(),
+-            ActionType::EditScrollback => "Open pane scrollback in editor".to_string(),
+-            ActionType::NewTab => "New tab".to_string(),
+-            ActionType::Detach => "Detach".to_string(),
+-            ActionType::Inbox => "Inbox".to_string(),
+-            ActionType::Quit => "Quit".to_string(),
++            ActionType::TogglePaneEmbedOrFloating => tr("Float or embed").to_string(),
++            ActionType::NewStackedPane => tr("New stacked pane").to_string(),
++            ActionType::ToggleFocusFullscreen => tr("Toggle fullscreen").to_string(),
++            ActionType::ToggleFloatingPanes => tr("Show/hide floating panes").to_string(),
++            ActionType::CloseFocus => tr("Close pane").to_string(),
++            ActionType::CloseTab => tr("Close tab").to_string(),
++            ActionType::ToggleActiveSyncTab => tr("Sync panes in tab").to_string(),
++            ActionType::ToggleTab => tr("Circle tab focus").to_string(),
++            ActionType::BreakPane => tr("Break pane to new tab").to_string(),
++            ActionType::EditScrollback => tr("Open pane scrollback in editor").to_string(),
++            ActionType::NewTab => tr("New tab").to_string(),
++            ActionType::Detach => tr("Detach").to_string(),
++            ActionType::Inbox => tr("Inbox").to_string(),
++            ActionType::Quit => tr("Quit").to_string(),
+             ActionType::ToggleStackListOrientation => {
+-                "Show stack titles in a row/column".to_string()
++                tr("Show stack titles in a row/column").to_string()
+             },
+-            ActionType::ToggleBars => "Show/hide bars".to_string(),
+-            ActionType::ShowBars => "Show bars".to_string(),
+-            ActionType::Other(_) => "Other action".to_string(),
++            ActionType::ToggleBars => tr("Show/hide bars").to_string(),
++            ActionType::ShowBars => tr("Show bars").to_string(),
++            ActionType::Other(_) => tr("Other action").to_string(),
+         }
+     }
+ 
+diff --git a/default-plugins/bars/src/compact_bar/clipboard_utils.rs b/default-plugins/bars/src/compact_bar/clipboard_utils.rs
+index 83a1a14..785f71b 100644
+--- a/default-plugins/bars/src/compact_bar/clipboard_utils.rs
++++ b/default-plugins/bars/src/compact_bar/clipboard_utils.rs
+@@ -1,14 +1,15 @@
++use zellij_i18n::{tr};
+ use crate::compact_bar::LinePart;
+ use zellij_tile::prelude::*;
+ 
+ pub fn text_copied_hint(copy_destination: CopyDestination) -> LinePart {
+     let hint = match copy_destination {
+-        CopyDestination::Command => "Text piped to external command",
++        CopyDestination::Command => tr("Text piped to external command"),
+         #[cfg(not(target_os = "macos"))]
+-        CopyDestination::Primary => "Text copied to system primary selection",
++        CopyDestination::Primary => tr("Text copied to system primary selection"),
+         #[cfg(target_os = "macos")]
+-        CopyDestination::Primary => "Text copied to system clipboard",
+-        CopyDestination::System => "Text copied to system clipboard",
++        CopyDestination::Primary => tr("Text copied to system clipboard"),
++        CopyDestination::System => tr("Text copied to system clipboard"),
+     };
+     LinePart {
+         part: serialize_text(&Text::from(hint).color_range(2, ..).opaque()),
+@@ -18,7 +19,7 @@ pub fn text_copied_hint(copy_destination: CopyDestination) -> LinePart {
+ }
+ 
+ pub fn system_clipboard_error() -> LinePart {
+-    let hint = " Error using the system clipboard.";
++    let hint = tr(" Error using the system clipboard.");
+     LinePart {
+         part: serialize_text(&Text::from(hint).color_range(2, ..).opaque()),
+         len: hint.len(),
+diff --git a/default-plugins/bars/src/compact_bar/line.rs b/default-plugins/bars/src/compact_bar/line.rs
+index 7cd92ce..d6582a0 100644
+--- a/default-plugins/bars/src/compact_bar/line.rs
++++ b/default-plugins/bars/src/compact_bar/line.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr};
+ use ansi_term::ANSIStrings;
+ 
+ use crate::compact_bar::{LinePart, TabRenderData, ARROW_SEPARATOR};
+@@ -599,8 +600,8 @@ impl RightSideElementsBuilder {
+ 
+     fn create_nested_hint(&self, hint: &NestedSessionHint, max_len: usize) -> Option<LinePart> {
+         let (prefix, keys) = match hint {
+-            NestedSessionHint::Ascend(keys) => ("Ascend: ", keys),
+-            NestedSessionHint::Descend(keys) => ("Descend: ", keys),
++            NestedSessionHint::Ascend(keys) => (tr("Ascend: "), keys),
++            NestedSessionHint::Descend(keys) => (tr("Descend: "), keys),
+             NestedSessionHint::None => return None,
+         };
+ 
+@@ -608,7 +609,7 @@ impl RightSideElementsBuilder {
+         let key_color = self.palette.text_unselected.emphasis_0;
+         let sep_color = self.palette.text_unselected.base;
+         let keys_text: Vec<String> = if keys.is_empty() {
+-            vec!["<unbound>".to_string()]
++            vec![tr("<unbound>").to_string()]
+         } else {
+             keys.iter().map(|key| format!("<{}>", key)).collect()
+         };
+@@ -638,8 +639,8 @@ impl RightSideElementsBuilder {
+         }
+ 
+         let message = match hint {
+-            NestedSessionHint::Ascend(_) => " nested session",
+-            NestedSessionHint::Descend(_) => " host session",
++            NestedSessionHint::Ascend(_) => tr(" nested session"),
++            NestedSessionHint::Descend(_) => tr(" host session"),
+             NestedSessionHint::None => return None,
+         };
+         let message_len = display_width(message);
+@@ -662,7 +663,7 @@ impl RightSideElementsBuilder {
+         } else {
+             Text::from(key_text).color_all(3).opaque()
+         };
+-        let ribbon_text = "Tooltip";
++        let ribbon_text = tr("Tooltip");
+         let mut ribbon = Text::from(ribbon_text);
+ 
+         if self.dimmed {
+diff --git a/default-plugins/bars/src/compact_bar/mod.rs b/default-plugins/bars/src/compact_bar/mod.rs
+index ee90bdf..8a7b77e 100644
+--- a/default-plugins/bars/src/compact_bar/mod.rs
++++ b/default-plugins/bars/src/compact_bar/mod.rs
+@@ -5,6 +5,7 @@ mod line;
+ mod tab;
+ pub(crate) mod tooltip;
+ 
++use zellij_i18n::{tr};
+ use crate::session_indicator::SessionIndicator;
+ use std::cmp::{max, min};
+ use std::collections::{BTreeMap, BTreeSet};
+@@ -1203,7 +1204,7 @@ fn prepare_tab_data(
+ fn get_tab_display_name(client: &ClientState, tab: &TabInfo) -> String {
+     let mut tab_name = tab.name.clone();
+     if tab.active && client.mode_info.mode == InputMode::RenameTab && tab_name.is_empty() {
+-        tab_name = "Enter name...".to_string();
++        tab_name = tr("Enter name...").to_string();
+     }
+     tab_name
+ }
+diff --git a/default-plugins/bars/src/compact_bar/tooltip.rs b/default-plugins/bars/src/compact_bar/tooltip.rs
+index 87a5f1e..b6d2019 100644
+--- a/default-plugins/bars/src/compact_bar/tooltip.rs
++++ b/default-plugins/bars/src/compact_bar/tooltip.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr};
+ use crate::click_actions::ClickRegion;
+ use crate::compact_bar::keybind_utils::{KeybindProcessor, TooltipEntry};
+ use zellij_tile::graphemes::display_width;
+@@ -304,10 +305,10 @@ impl<'a> TooltipRenderer<'a> {
+ 
+         if entries.is_empty() {
+             let tooltip_text = match self.mode_info.mode {
+-                InputMode::EnterSearch => "Entering search term...".to_owned(),
+-                InputMode::RenameTab => "Renaming tab...".to_owned(),
+-                InputMode::RenamePane => "Renaming pane...".to_owned(),
+-                InputMode::RenameSession => "Renaming session...".to_owned(),
++                InputMode::EnterSearch => tr("Entering search term...").to_owned(),
++                InputMode::RenameTab => tr("Renaming tab...").to_owned(),
++                InputMode::RenamePane => tr("Renaming pane...").to_owned(),
++                InputMode::RenameSession => tr("Renaming session...").to_owned(),
+                 _ => {
+                     format!("{:?}", self.mode_info.mode)
+                 },
+diff --git a/default-plugins/bars/src/link/mod.rs b/default-plugins/bars/src/link/mod.rs
+index 0f3fd27..2571b02 100644
+--- a/default-plugins/bars/src/link/mod.rs
++++ b/default-plugins/bars/src/link/mod.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+ use std::path::{Path, PathBuf};
+ use zellij_tile::prelude::*;
+@@ -134,10 +135,7 @@ impl Link {
+             pipe_message_to_plugin(
+                 MessageToPlugin::new("filepicker")
+                     .with_plugin_url("filepicker")
+-                    .new_plugin_instance_should_have_pane_title(&format!(
+-                        "Browse: {}",
+-                        absolute_path.display()
+-                    ))
++                    .new_plugin_instance_should_have_pane_title(&trf("Browse: {path}", &[("path", &absolute_path.display().to_string())]))
+                     .new_plugin_instance_should_be_focused()
+                     .new_plugin_instance_should_have_cwd(absolute_path)
+                     .with_args(args)
+@@ -199,7 +197,7 @@ fn link_highlight(pattern: String, context: BTreeMap<String, String>) -> RegexHi
+         bold: false,
+         italic: true,
+         underline: true,
+-        tooltip_text: Some("Open".to_string()),
++        tooltip_text: Some(tr("Open").to_string()),
+     }
+ }
+ 
+diff --git a/default-plugins/bars/src/main.rs b/default-plugins/bars/src/main.rs
+index 5c5c044..509aaf8 100644
+--- a/default-plugins/bars/src/main.rs
++++ b/default-plugins/bars/src/main.rs
+@@ -11,6 +11,7 @@ mod tab_drag;
+ mod tab_marker;
+ mod timers;
+ 
++use zellij_i18n::{tr};
+ use std::collections::BTreeMap;
+ use zellij_tile::prelude::*;
+ 
+@@ -47,7 +48,7 @@ pub fn displayed_session_name(mode_info: &ModeInfo) -> Option<String> {
+     if mode_info.mode == InputMode::RenameSession {
+         return match mode_info.session_name.as_deref() {
+             Some(name) if !name.is_empty() => Some(name.to_owned()),
+-            _ => Some("Enter name...".to_owned()),
++            _ => Some(tr("Enter name...").to_owned()),
+         };
+     }
+     mode_info.session_name.clone()
+diff --git a/default-plugins/bars/src/session_indicator.rs b/default-plugins/bars/src/session_indicator.rs
+index 26059df..85da151 100644
+--- a/default-plugins/bars/src/session_indicator.rs
++++ b/default-plugins/bars/src/session_indicator.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use std::collections::BTreeMap;
+ use zellij_tile::graphemes::display_width;
+ use zellij_tile::prelude::*;
+@@ -68,10 +69,10 @@ fn status_color(status: AttentionStatus) -> IndicatorColor {
+ 
+ fn status_words(status: AttentionStatus) -> &'static str {
+     match status {
+-        AttentionStatus::NeedsYou => "need you",
+-        AttentionStatus::Failed => "failed",
+-        AttentionStatus::Done => "done",
+-        AttentionStatus::Working => "working",
++        AttentionStatus::NeedsYou => tr("need you"),
++        AttentionStatus::Failed => tr("failed"),
++        AttentionStatus::Done => tr("done"),
++        AttentionStatus::Working => tr("working"),
+         _ => "",
+     }
+ }
+@@ -89,9 +90,9 @@ fn watch_variants(count: usize, running: usize, simplified_ui: bool) -> Vec<Indi
+     let head = format!("{} {}", symbol, count);
+     let head_len = head.chars().count();
+     let words = if count == 1 {
+-        "watch alert"
++        tr("watch alert")
+     } else {
+-        "watch alerts"
++        tr("watch alerts")
+     };
+     let colored = |text: String, end: usize| IndicatorText {
+         text,
+@@ -99,7 +100,7 @@ fn watch_variants(count: usize, running: usize, simplified_ui: bool) -> Vec<Indi
+     };
+     vec![
+         colored(
+-            format!("{} {} · {} running", head, words, running),
++            format!("{} {} · {}", head, words, trf("{count} running", &[("count", &running.to_string())])),
+             head_len + 1 + words.chars().count(),
+         ),
+         colored(
+@@ -123,7 +124,7 @@ pub fn indicator_variants(
+     }
+     match top {
+         None => vec![
+-            plain(format!("{} running", running)),
++            plain(trf("{count} running", &[("count", &running.to_string())])),
+             plain(format!("{}", running)),
+         ],
+         Some((status, count)) => {
+@@ -137,7 +138,7 @@ pub fn indicator_variants(
+             };
+             vec![
+                 colored(
+-                    format!("{} {} · {} running", head, status_words(status), running),
++                    format!("{} {} · {}", head, status_words(status), trf("{count} running", &[("count", &running.to_string())])),
+                     head_len + 1 + status_words(status).chars().count(),
+                 ),
+                 colored(format!("{} · {}", head, running), head_len),
+diff --git a/default-plugins/bars/src/tab_bar/mod.rs b/default-plugins/bars/src/tab_bar/mod.rs
+index 4355687..45682b3 100644
+--- a/default-plugins/bars/src/tab_bar/mod.rs
++++ b/default-plugins/bars/src/tab_bar/mod.rs
+@@ -1,6 +1,7 @@
+ mod line;
+ mod tab;
+ 
++use zellij_i18n::{tr};
+ use std::cmp::{max, min};
+ use std::collections::{BTreeMap, VecDeque};
+ 
+@@ -542,7 +543,7 @@ impl TabBar {
+             let mut tabname = t.name.clone();
+             if t.active && client.mode_info.mode == InputMode::RenameTab {
+                 if tabname.is_empty() {
+-                    tabname = String::from("Enter name...");
++                    tabname = String::from(tr("Enter name..."));
+                 }
+                 active_tab_index = t.position;
+             } else if t.active {

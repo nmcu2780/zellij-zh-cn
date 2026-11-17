@@ -1,0 +1,131 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zellij-zh-cn build <build@localhost>
+Date: Tue, 17 Nov 2026 21:58:48 +0800
+Subject: [PATCH 19/19] i18n: wrap CJK text by display width in about welcome
+ window
+
+---
+ default-plugins/about/src/onboarding.rs | 85 +++++++++++++++++++++----
+ 1 file changed, 73 insertions(+), 12 deletions(-)
+
+diff --git a/default-plugins/about/src/onboarding.rs b/default-plugins/about/src/onboarding.rs
+index 337cc79..ec4d4fa 100644
+--- a/default-plugins/about/src/onboarding.rs
++++ b/default-plugins/about/src/onboarding.rs
+@@ -530,8 +530,13 @@ fn emphasis_ranges(text: &str) -> Vec<(usize, usize, usize)> {
+ pub fn bulleted(text: &str, width: usize) -> Vec<ComponentLine> {
+     let ranges = emphasis_ranges(text);
+     let mut lines = vec![];
++    let characters: Vec<char> = text.chars().collect();
+     let mut position = 0;
+     for (index, wrapped) in wrap(text, width.saturating_sub(2)).into_iter().enumerate() {
++        // a line break either consumed a space or fell between CJK characters
++        while position < characters.len() && characters[position].is_whitespace() {
++            position += 1;
++        }
+         let length = wrapped.chars().count();
+         let prefix = if index == 0 { "- " } else { "  " };
+         let mut styled_line = Text::from(format!("{}{}", prefix, wrapped));
+@@ -544,27 +549,63 @@ pub fn bulleted(text: &str, width: usize) -> Vec<ComponentLine> {
+             }
+         }
+         lines.push(styled(styled_line));
+-        position += length + 1;
++        position += length;
+     }
+     lines
+ }
+ 
++// Splits a whitespace-delimited word into the pieces a line may break between:
++// every double-width character (CJK has no spaces to break at) is its own
++// piece, runs of narrow characters stay together.
++fn word_pieces(word: &str) -> Vec<&str> {
++    let mut pieces = vec![];
++    let mut start = 0;
++    for (index, character) in word.char_indices() {
++        let wide = zellij_tile::graphemes::display_width(&word[index..index + character.len_utf8()]) > 1;
++        if wide {
++            if start < index {
++                pieces.push(&word[start..index]);
++            }
++            pieces.push(&word[index..index + character.len_utf8()]);
++            start = index + character.len_utf8();
++        }
++    }
++    if start < word.len() {
++        pieces.push(&word[start..]);
++    }
++    pieces
++}
++
++// Closing punctuation must not start a line.
++fn cannot_start_a_line(piece: &str) -> bool {
++    matches!(
++        piece,
++        "，" | "。" | "、" | "；" | "：" | "！" | "？" | "）" | "”" | "’" | "》" | "」" | "…"
++    )
++}
++
+ pub fn wrap(text: &str, width: usize) -> Vec<String> {
+     let width = width.max(10);
+     let mut lines = vec![];
+     let mut current = String::new();
++    let mut current_width = 0;
+     for word in text.split_whitespace() {
+-        let candidate = if current.is_empty() {
+-            word.to_owned()
+-        } else {
+-            format!("{} {}", current, word)
+-        };
+-        // compare display width rather than char count: CJK cells are 2 wide
+-        if zellij_tile::graphemes::display_width(&candidate) > width && !current.is_empty() {
+-            lines.push(std::mem::take(&mut current));
+-            current = word.to_owned();
+-        } else {
+-            current = candidate;
++        for (index, piece) in word_pieces(word).into_iter().enumerate() {
++            let separator = if index == 0 && !current.is_empty() { " " } else { "" };
++            let piece_width = zellij_tile::graphemes::display_width(piece);
++            // compare display width rather than char count: CJK cells are 2 wide
++            if current_width + separator.len() + piece_width > width
++                && !current.is_empty()
++                && !cannot_start_a_line(piece)
++            {
++                lines.push(std::mem::take(&mut current));
++                current = piece.to_owned();
++                current_width = piece_width;
++            } else {
++                current.push_str(separator);
++                current.push_str(piece);
++                current_width += separator.len() + piece_width;
++            }
+         }
+     }
+     if !current.is_empty() {
+@@ -592,6 +633,26 @@ mod window_welcome_tests {
+         }
+     }
+ 
++    #[test]
++    fn text_without_spaces_wraps_by_display_width() {
++        let text = "关闭此窗口后，会话保持运行，可从会话列表重新打开。";
++        let wrapped = wrap(text, 20);
++        assert!(wrapped.len() > 1);
++        for line in &wrapped {
++            assert!(zellij_tile::graphemes::display_width(line) <= 20 + 2, "{}", line);
++            assert!(!line.starts_with('，') && !line.starts_with('。'), "{}", line);
++        }
++        assert_eq!(wrapped.concat(), text);
++    }
++
++    #[test]
++    fn english_wrapping_is_unchanged() {
++        assert_eq!(
++            wrap("one two three four five six seven", 12),
++            vec!["one two", "three four", "five six", "seven"]
++        );
++    }
++
+     #[test]
+     fn a_wrapped_point_has_one_bullet_and_an_indented_continuation() {
+         let text = window_welcome_points(false)[0].clone();

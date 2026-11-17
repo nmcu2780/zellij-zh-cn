@@ -1,0 +1,1782 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 13:44:57 +0800
+Subject: [PATCH 08/19] i18n: translate session-manager plugin
+
+Wrap all user-visible strings via zellij-i18n tr/trf/tr_ctx: welcome and
+session-list screens, exited/resurrect sessions, new-session form (layout
+selection, folder prompt), rename and kill confirmations, help/hint lines,
+errors, inbox, app panel, badges and time-ago strings. Layout prompt color
+ranges and row-span lengths are computed from the translated text; centering
+and fit checks use display_width instead of chars().count()/len().
+---
+ default-plugins/session-manager/Cargo.toml    |   1 +
+ .../session-manager/src/app_panel.rs          |  13 +-
+ default-plugins/session-manager/src/help.rs   |  10 +-
+ default-plugins/session-manager/src/inbox.rs  | 110 +++---
+ default-plugins/session-manager/src/main.rs   | 315 +++++++++---------
+ default-plugins/session-manager/src/panel.rs  |  58 ++--
+ .../src/resurrectable_sessions.rs             |   8 +-
+ .../session-manager/src/session_list.rs       |   1 +
+ .../session-manager/src/ui/components.rs      | 152 +++++----
+ default-plugins/session-manager/src/ui/mod.rs |   1 +
+ 10 files changed, 346 insertions(+), 323 deletions(-)
+
+diff --git a/default-plugins/session-manager/Cargo.toml b/default-plugins/session-manager/Cargo.toml
+index d6921ea..8d34f7f 100644
+--- a/default-plugins/session-manager/Cargo.toml
++++ b/default-plugins/session-manager/Cargo.toml
+@@ -5,6 +5,7 @@ authors = ["Aram Drevekenin <aram@poor.dev>"]
+ edition.workspace = true
+ 
+ [dependencies]
++zellij-i18n = { workspace = true }
+ zellij-tile = { path = "../../zellij-tile" }
+ fuzzy-matcher = { workspace = true }
+ unicode-width = { workspace = true }
+diff --git a/default-plugins/session-manager/src/app_panel.rs b/default-plugins/session-manager/src/app_panel.rs
+index 33e81f1..013c38b 100644
+--- a/default-plugins/session-manager/src/app_panel.rs
++++ b/default-plugins/session-manager/src/app_panel.rs
+@@ -1,4 +1,5 @@
+ use std::cell::Cell;
++use zellij_i18n::{tr, trf};
+ use std::path::PathBuf;
+ 
+ use zellij_tile::prelude::{ConnectToSession, LayoutInfo, PaneId};
+@@ -126,17 +127,17 @@ pub fn quit_lines(sessions: &[String]) -> Vec<String> {
+     let mut lines = vec![];
+     match sessions.len() {
+         0 => {
+-            lines.push("Quit Zellij?".to_owned());
++            lines.push(tr("Quit Zellij?").to_owned());
+             lines.push(String::new());
+-            lines.push("No sessions are running.".to_owned());
++            lines.push(tr("No sessions are running.").to_owned());
+         },
+         count => {
+-            lines.push("Quit Zellij and stop all sessions?".to_owned());
++            lines.push(tr("Quit Zellij and stop all sessions?").to_owned());
+             lines.push(String::new());
+             lines.push(if count == 1 {
+-                "This stops 1 session:".to_owned()
++                tr("This stops 1 session:").to_owned()
+             } else {
+-                format!("This stops these {} sessions:", count)
++                trf("This stops these {count} sessions:", &[("count", count.to_string().as_str())])
+             });
+             lines.extend(sessions.iter().map(|name| format!("  {}", name)));
+         },
+@@ -157,7 +158,7 @@ pub fn centered_block(lines: &[String], rows: usize, cols: usize) -> (usize, usi
+         let hidden = shown.len() - room + 1;
+         let tail = shown.split_off(shown.len() - 2);
+         shown.truncate(room.saturating_sub(3));
+-        shown.push(format!("  … and {} more", hidden));
++        shown.push(trf("  … and {count} more", &[("count", hidden.to_string().as_str())]));
+         shown.extend(tail);
+     }
+     let width = shown
+diff --git a/default-plugins/session-manager/src/help.rs b/default-plugins/session-manager/src/help.rs
+index 1574285..2237fea 100644
+--- a/default-plugins/session-manager/src/help.rs
++++ b/default-plugins/session-manager/src/help.rs
+@@ -1,5 +1,6 @@
+ use unicode_width::UnicodeWidthStr;
+ use zellij_tile::prelude::*;
++use zellij_i18n::{tr};
+ 
+ use crate::inbox::key_hint_text;
+ use crate::panel::truncate_plain;
+@@ -196,9 +197,6 @@ pub fn all_keys_lines(hints: &[Hint], width: usize) -> Vec<String> {
+         .collect()
+ }
+ 
+-pub const ALL_KEYS_TITLE: &str = "All keys";
+-pub const ALL_KEYS_CLOSE: &str = "Press any key to go back";
+-pub const ALL_KEYS_SCROLL: &str = "<↓↑> more  any other key: back";
+ 
+ pub fn render_all_keys(title: &str, hints: &[Hint], rows: usize, cols: usize, scroll: &mut usize) {
+     let inner = cols.saturating_sub(2).max(10);
+@@ -211,14 +209,14 @@ pub fn render_all_keys(title: &str, hints: &[Hint], rows: usize, cols: usize, sc
+         let half = (lines.len() + 1) / 2;
+         let right = lines.split_off(half);
+         *scroll = 0;
+-        (vec![lines, right], ALL_KEYS_CLOSE)
++        (vec![lines, right], tr("Press any key to go back"))
+     } else if lines.len() > room {
+         *scroll = (*scroll).min(lines.len() - room);
+         let shown = lines[*scroll..*scroll + room].to_vec();
+-        (vec![shown], ALL_KEYS_SCROLL)
++        (vec![shown], tr("<↓↑> more  any other key: back"))
+     } else {
+         *scroll = 0;
+-        (vec![lines], ALL_KEYS_CLOSE)
++        (vec![lines], tr("Press any key to go back"))
+     };
+     let height = columns.iter().map(|c| c.len()).max().unwrap_or(0);
+     let column_width = columns
+diff --git a/default-plugins/session-manager/src/inbox.rs b/default-plugins/session-manager/src/inbox.rs
+index 53af0f8..a9430d9 100644
+--- a/default-plugins/session-manager/src/inbox.rs
++++ b/default-plugins/session-manager/src/inbox.rs
+@@ -2,6 +2,7 @@ use std::collections::VecDeque;
+ use std::ops::Range;
+ use unicode_width::UnicodeWidthStr;
+ use zellij_tile::prelude::*;
++use zellij_i18n::{tr, trf};
+ 
+ use crate::app_panel::focus_session_pane;
+ 
+@@ -14,14 +15,11 @@ pub const AGE_CLOCK_MAX_MS: u64 = 60_000;
+ pub const AGE_CLOCK_SLACK_SECONDS: f64 = 0.05;
+ pub const CARD_ITEM_LIMIT: usize = 5;
+ pub const CARD_WIDTH: usize = 56;
+-pub const OPEN_INBOX_TEXT: &str = "Open inbox ›";
+-pub const DONT_SHOW_AGAIN_TEXT: &str = " Don't show again ";
+ pub const SESSION_MAX_WIDTH: usize = 16;
+ pub const PANE_MAX_WIDTH: usize = 20;
+ pub const MIN_PANE_WIDTH: usize = 6;
+ pub const MIN_TEXT_WIDTH: usize = 12;
+ pub const TAB_SWITCH_HINT: &str = "<TAB> switch";
+-pub const EMPTY_INBOX_TEXT: &str = "Nothing in the inbox";
+ pub const LIST_MIN_COLS: usize = 20;
+ pub const LIST_MAX_COLS: usize = 32;
+ pub const LIST_SHARE: usize = 5;
+@@ -32,8 +30,10 @@ pub const LIVE_VIEW_MIN_ROWS: usize = 8;
+ pub const LIVE_VIEW_GAP: usize = 2;
+ pub const SESSIONS_VIEW_MIN_COLS: usize = 20;
+ pub const SESSIONS_VIEW_MIN_ROWS: usize = 3;
++#[cfg(test)]
+ pub const LIVE_VIEW_REFUSED_TEXT: &str = "Typing was refused: focus the inbox and try again";
+ pub const TYPE_KEY: &str = "<Alt ENTER>";
++#[cfg(test)]
+ pub const TYPE_INTO_IT_HINT: &str = "<Alt ENTER> type into it";
+ pub const SESSION_COLUMN_MAX: usize = 12;
+ pub const SPINNER_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+@@ -235,16 +235,16 @@ impl LiveLayout {
+ 
+ pub fn closed_reason_text(reason: MirrorClosedReason) -> &'static str {
+     match reason {
+-        MirrorClosedReason::PaneClosed => "the pane was closed",
+-        MirrorClosedReason::PaneNotFound => "the pane was not found",
+-        MirrorClosedReason::SessionEnding => "the session ended",
+-        MirrorClosedReason::Rejected => "the session refused",
+-        MirrorClosedReason::VersionMismatch => "preview not available",
+-        MirrorClosedReason::UnsupportedHost => "unsupported host",
+-        MirrorClosedReason::ConnectionFailed => "preview not available",
+-        MirrorClosedReason::ConnectionLost => "preview not available",
+-        MirrorClosedReason::ProtocolError => "protocol error",
+-        MirrorClosedReason::ContainsViewer => "it runs this session",
++        MirrorClosedReason::PaneClosed => tr("the pane was closed"),
++        MirrorClosedReason::PaneNotFound => tr("the pane was not found"),
++        MirrorClosedReason::SessionEnding => tr("the session ended"),
++        MirrorClosedReason::Rejected => tr("the session refused"),
++        MirrorClosedReason::VersionMismatch => tr("preview not available"),
++        MirrorClosedReason::UnsupportedHost => tr("unsupported host"),
++        MirrorClosedReason::ConnectionFailed => tr("preview not available"),
++        MirrorClosedReason::ConnectionLost => tr("preview not available"),
++        MirrorClosedReason::ProtocolError => tr("protocol error"),
++        MirrorClosedReason::ContainsViewer => tr("it runs this session"),
+     }
+ }
+ 
+@@ -266,13 +266,13 @@ enum BlockLine {
+ pub fn status_title(item: &GlobalAttentionItem) -> &'static str {
+     let attention = &item.item.attention;
+     match attention.effective_status() {
+-        AttentionStatus::NeedsYou => "Needs You",
+-        AttentionStatus::Failed => "Failed",
+-        AttentionStatus::Done => "Done",
+-        AttentionStatus::Working => "Working",
+-        AttentionStatus::Quiet => "Went Quiet",
+-        AttentionStatus::NewOutput => "New Output",
+-        AttentionStatus::Idle if attention.watched => "Watching",
++        AttentionStatus::NeedsYou => tr("Needs You"),
++        AttentionStatus::Failed => tr("Failed"),
++        AttentionStatus::Done => tr("Done"),
++        AttentionStatus::Working => tr("Working"),
++        AttentionStatus::Quiet => tr("Went Quiet"),
++        AttentionStatus::NewOutput => tr("New Output"),
++        AttentionStatus::Idle if attention.watched => tr("Watching"),
+         AttentionStatus::Idle => "Idle",
+     }
+ }
+@@ -460,11 +460,11 @@ pub fn now_ms() -> u64 {
+ 
+ pub fn age_label(since_ms: u64, now_ms: u64, compact: bool) -> String {
+     let secs = now_ms.saturating_sub(since_ms) / 1000;
+-    let ago = if compact { "" } else { " ago" };
++    let ago = if compact { "" } else { tr(" ago") };
+     if since_ms == 0 {
+         String::new()
+     } else if secs < JUST_NOW_SECONDS {
+-        if compact { "now" } else { "just now" }.to_owned()
++        if compact { "now" } else { tr("just now") }.to_owned()
+     } else if secs < 60 {
+         format!("<1m{}", ago)
+     } else if secs < 3600 {
+@@ -1222,7 +1222,7 @@ impl Inbox {
+                 "While you were away · {}",
+                 away_text(now.saturating_sub(since))
+             ),
+-            None => format!("Inbox ({})", self.counted_count()),
++            None => trf("Inbox ({count})", &[("count", self.counted_count().to_string().as_str())]),
+         };
+         let (nothing, back_to) = if counted.is_empty() {
+             (
+@@ -1357,8 +1357,8 @@ impl Inbox {
+ 
+     pub fn tab_titles(&self, sessions: usize) -> (String, String) {
+         (
+-            format!("Inbox ({})", self.counted_count()),
+-            format!("Sessions ({})", sessions),
++            trf("Inbox ({count})", &[("count", self.counted_count().to_string().as_str())]),
++            trf("Sessions ({count})", &[("count", sessions.to_string().as_str())]),
+         )
+     }
+ 
+@@ -1742,7 +1742,7 @@ impl Inbox {
+             return changed;
+         }
+         if status.input_released_by == Some(LiveViewRelease::NotAllowed) {
+-            self.live_notice = Some(LIVE_VIEW_REFUSED_TEXT.to_owned());
++            self.live_notice = Some(tr("Typing was refused: focus the inbox and try again").to_owned());
+         }
+         self.live = Some(status);
+         if was_captured || self.capture_target.is_some() {
+@@ -1781,7 +1781,7 @@ impl Inbox {
+             Some(MirrorState::NoTarget) => "no pane selected".to_owned(),
+             Some(MirrorState::Live) => String::new(),
+             Some(MirrorState::Closed(reason)) => {
+-                format!("closed: {}", closed_reason_text(reason))
++                trf("closed: {reason}", &[("reason", closed_reason_text(reason))])
+             },
+         }
+     }
+@@ -1803,7 +1803,7 @@ impl Inbox {
+             .map(|(_, _, cols, rows)| (cols, rows));
+         if let (Some(source), Some(view)) = (live.source_size, view_size) {
+             if (source.cols, source.rows) != view {
+-                parts.push(format!("cropped from {}x{}", source.cols, source.rows));
++                parts.push(trf("cropped from {w}x{h}", &[("w", source.cols.to_string().as_str()), ("h", source.rows.to_string().as_str())]));
+             }
+         }
+         parts.join(" · ")
+@@ -1828,7 +1828,7 @@ impl Inbox {
+             return notice.clone();
+         }
+         if self.live_view_target().is_some() {
+-            return TYPE_INTO_IT_HINT.to_owned();
++            return tr("<Alt ENTER> type into it").to_owned();
+         }
+         String::new()
+     }
+@@ -2101,7 +2101,7 @@ impl Inbox {
+         let (above, below) = self.hidden_counts(scroll, shown_end);
+         if above > 0 {
+             print_text_with_coordinates(
+-                Text::from(format!("↑ {} more", above).as_str()).dim_all(),
++                Text::from(trf("↑ {count} more", &[("count", above.to_string().as_str())]).as_str()).dim_all(),
+                 left,
+                 top,
+                 None,
+@@ -2110,7 +2110,7 @@ impl Inbox {
+         }
+         if below > 0 {
+             print_text_with_coordinates(
+-                Text::from(format!("↓ {} more", below).as_str()).dim_all(),
++                Text::from(trf("↓ {count} more", &[("count", below.to_string().as_str())]).as_str()).dim_all(),
+                 left,
+                 item_top + item_rows,
+                 None,
+@@ -2372,13 +2372,13 @@ impl Inbox {
+         };
+         if !live {
+             return vec![
+-                (crate::help::hint("<ENTER>", "go there"), ItemAction::Go),
++                (crate::help::hint("<ENTER>", tr("go there")), ItemAction::Go),
+                 (crate::help::hint("<c>", dismiss), ItemAction::Dismiss),
+             ];
+         }
+         vec![
+-            (crate::help::hint("<ENTER>", "go"), ItemAction::Go),
+-            (crate::help::hint(TYPE_KEY, "type"), ItemAction::Type),
++            (crate::help::hint("<ENTER>", tr("go")), ItemAction::Go),
++            (crate::help::hint(TYPE_KEY, tr("type")), ItemAction::Type),
+             (crate::help::hint("<c>", dismiss), ItemAction::Dismiss),
+         ]
+     }
+@@ -2390,7 +2390,7 @@ impl Inbox {
+             .map(|(h, _)| h)
+             .collect();
+         if live {
+-            let more = crate::help::hint("<?>", "more");
++            let more = crate::help::hint("<?>", tr("more"));
+             let mut lines: Vec<crate::help::BlockLine> = if self.offer_hints.is_empty() {
+                 vec![]
+             } else {
+@@ -2417,7 +2417,7 @@ impl Inbox {
+         crate::help::block_lines(
+             &primary,
+             &self.help_hints,
+-            &crate::help::hint("<?>", "all keys"),
++            &crate::help::hint("<?>", tr("all keys")),
+             width,
+         )
+     }
+@@ -2532,7 +2532,7 @@ impl Inbox {
+         }
+         if order.is_empty() && !self.show_quiet {
+             lines.push(BlockLine::Text {
+-                text: Text::from(EMPTY_INBOX_TEXT).color_range(2, ..),
++                text: Text::from(tr("Nothing in the inbox")).color_range(2, ..),
+                 gutter: None,
+                 target: None,
+             });
+@@ -2541,9 +2541,9 @@ impl Inbox {
+         let quiet = self.quiet_count();
+         if quiet > 0 {
+             let line = if self.show_quiet {
+-                "<a> hide items with only new output, quiet or muted".to_owned()
++                tr("<a> hide items with only new output, quiet or muted").to_owned()
+             } else if quiet == 1 {
+-                "1 more item with only new output, quiet or muted · <a> show".to_owned()
++                tr("1 more item with only new output, quiet or muted · <a> show").to_owned()
+             } else {
+                 format!(
+                     "{} more items with only new output, quiet or muted · <a> show",
+@@ -2646,7 +2646,7 @@ impl Inbox {
+         }
+         if let Some(previous) = content.back_to.as_ref() {
+             if y <= last_y {
+-                let line = format!("Back to {} ›", sanitize_display_text(previous));
++                let line = trf("Back to {name} ›", &[("name", sanitize_display_text(previous).as_str())]);
+                 let mut text = Text::from(line.as_str()).color_range(3, ..);
+                 if self.card_hovered == Some(CardTarget::BackTo(previous.clone())) {
+                     text = text.italic_all();
+@@ -2663,10 +2663,10 @@ impl Inbox {
+         let footer_y = y.min(last_y);
+         let mut extra = vec![];
+         if content.hidden_items > 0 {
+-            extra.push(format!("+ {} more", content.hidden_items));
++            extra.push(trf("+ {count} more", &[("count", content.hidden_items.to_string().as_str())]));
+         }
+         if content.activity > 0 {
+-            extra.push(format!("+ {} activity", content.activity));
++            extra.push(trf("+ {count} activity", &[("count", content.activity.to_string().as_str())]));
+         }
+         if !extra.is_empty() {
+             print_text_with_coordinates(
+@@ -2678,9 +2678,9 @@ impl Inbox {
+             );
+         }
+         let open = if popup_focused {
+-            format!("<ENTER> {}", OPEN_INBOX_TEXT)
++            format!("<ENTER> {}", tr("Open inbox ›"))
+         } else {
+-            OPEN_INBOX_TEXT.to_owned()
++            tr("Open inbox ›").to_owned()
+         };
+         let open_x = (content_x + content_width).saturating_sub(open.width());
+         let mut open_text = Text::from(open.as_str()).color_range(3, ..);
+@@ -2706,10 +2706,10 @@ impl Inbox {
+         }
+         let bottom = format!("└{}┘", "─".repeat(inner));
+         print_text_with_coordinates(Text::from(bottom.as_str()), 0, bottom_y, Some(width), None);
+-        if opened_at_startup && inner > DONT_SHOW_AGAIN_TEXT.width() + 2 {
+-            let text_width = DONT_SHOW_AGAIN_TEXT.width();
++        if opened_at_startup && inner > tr(" Don't show again ").width() + 2 {
++            let text_width = tr(" Don't show again ").width();
+             let x = width.saturating_sub(text_width + 2);
+-            let mut text = Text::from(DONT_SHOW_AGAIN_TEXT).dim_all();
++            let mut text = Text::from(tr(" Don't show again ")).dim_all();
+             if self.card_hovered == Some(CardTarget::DontShowAgain) {
+                 text = text.italic_all();
+             }
+@@ -2805,15 +2805,15 @@ impl Section {
+ 
+     pub fn title(&self) -> &'static str {
+         match self {
+-            Section::Watching => "Watching",
+-            Section::NeedsYou => "Needs You",
+-            Section::Failed => "Failed",
+-            Section::Done => "Done",
+-            Section::Working => "Working",
+-            Section::WentQuiet => "Went Quiet",
+-            Section::NewOutput => "New Output",
++            Section::Watching => tr("Watching"),
++            Section::NeedsYou => tr("Needs You"),
++            Section::Failed => tr("Failed"),
++            Section::Done => tr("Done"),
++            Section::Working => tr("Working"),
++            Section::WentQuiet => tr("Went Quiet"),
++            Section::NewOutput => tr("New Output"),
+             Section::Idle => "Idle",
+-            Section::Muted => "Muted",
++            Section::Muted => tr("Muted"),
+         }
+     }
+ 
+diff --git a/default-plugins/session-manager/src/main.rs b/default-plugins/session-manager/src/main.rs
+index bc1d5be..3e01390 100644
+--- a/default-plugins/session-manager/src/main.rs
++++ b/default-plugins/session-manager/src/main.rs
+@@ -13,6 +13,7 @@ mod ui;
+ use std::collections::BTreeMap;
+ use uuid::Uuid;
+ use zellij_tile::prelude::*;
++use zellij_i18n::{tr, trf, tr_ctx};
+ 
+ use app_panel::{
+     close_self, hide_self, switch_session, switch_session_and_close_current,
+@@ -34,7 +35,7 @@ use inbox::{
+     BrowserTab, BrowserTarget, CardTarget as InboxCardTarget, Inbox, ItemAction, ItemKey,
+     LiveLayout, SessionsLiveTarget,
+ };
+-use panel::{render_preview, render_session_tree, Panel, PanelSize, NO_OTHER_SESSIONS_TEXT};
++use panel::{render_preview, render_session_tree, Panel, PanelSize};
+ use resurrectable_sessions::ResurrectableSessions;
+ use session_list::SessionList;
+ 
+@@ -768,7 +769,7 @@ impl State {
+         if self.show_all_keys {
+             let hints = self.all_keys();
+             let mut scroll = self.all_keys_scroll;
+-            help::render_all_keys(help::ALL_KEYS_TITLE, &hints, rows, cols, &mut scroll);
++            help::render_all_keys(tr("All keys"), &hints, rows, cols, &mut scroll);
+             self.all_keys_scroll = scroll;
+             return;
+         }
+@@ -880,7 +881,7 @@ impl State {
+                 UnifiedSearchResult::ResurrectableSession { .. } => Some("Resurrect"),
+             }
+         } else if self.single_screen_state.search_term.is_empty() && self.panel.size.is_some() {
+-            Some("New session with a random name")
++            Some(tr("New session with a random name"))
+         } else if !self.single_screen_state.search_term.is_empty() {
+             if let Some(result) = self.single_screen_state.get_selected_result() {
+                 match result {
+@@ -894,7 +895,7 @@ impl State {
+                 } else if self.resurrectable_sessions.has_session(typed) {
+                     Some("Resurrect")
+                 } else {
+-                    Some("Create new")
++                    Some(tr("Create new"))
+                 }
+             }
+         } else {
+@@ -918,25 +919,25 @@ impl State {
+         let target = self.sessions_open_target();
+         primary.extend(self.open_way_hints(Some(&target), false));
+         let mut secondary = vec![
+-            hint("<↓↑>", "select"),
+-            hint("<←→>", "tabs and panes"),
+-            hint("<type>", "search or name a new session"),
++            hint("<↓↑>", tr("select")),
++            hint("<←→>", tr("tabs and panes")),
++            hint("<type>", tr("search or name a new session")),
+         ];
+         if self.shows_browser_tabs() {
+-            secondary.push(hint("<TAB>", "inbox"));
++            secondary.push(hint("<TAB>", tr("inbox")));
+         }
+         if !self.is_welcome_screen {
+-            secondary.push(hint("<ESC>", "close"));
++            secondary.push(hint("<ESC>", tr("close")));
+         }
+         if self.exited_session_count() > 0 {
+-            secondary.push(hint("<Shift Del>", "delete all exited"));
++            secondary.push(hint("<Shift Del>", tr("delete all exited")));
+         }
+-        secondary.push(hint("<F1>", "all keys"));
++        secondary.push(hint("<F1>", tr("all keys")));
+         (primary, secondary)
+     }
+     fn sessions_help_block(&self, width: usize) -> Vec<help::BlockLine> {
+         let (primary, secondary) = self.sessions_help_groups();
+-        help::block_lines(&primary, &secondary, &help::hint("<F1>", "all keys"), width)
++        help::block_lines(&primary, &secondary, &help::hint("<F1>", tr("all keys")), width)
+     }
+     fn help_width(&self, cols: usize) -> usize {
+         cols.saturating_sub(4).max(10)
+@@ -1077,7 +1078,7 @@ impl State {
+                             );
+                             if self.no_other_sessions() {
+                                 print_text_with_coordinates(
+-                                    Text::from(NO_OTHER_SESSIONS_TEXT),
++                                    Text::from(tr("No other sessions.")),
+                                     x_centered,
+                                     y_offset + 2,
+                                     None,
+@@ -1108,7 +1109,7 @@ impl State {
+                             "\u{1b}[m\u{1b}[{};{}H{}: {} ({} to go back)",
+                             y + 1,
+                             x + 1,
+-                            self.colors.session_name_prompt("New session name"),
++                            self.colors.session_name_prompt(tr("New session name")),
+                             self.colors.session_and_folder_entry(new_session_name),
+                             esc,
+                         );
+@@ -1117,22 +1118,30 @@ impl State {
+                         let layout_search_term =
+                             &self.single_screen_state.layout_list.layout_search_term;
+                         let search_term_len = layout_search_term.len();
++                        let layout_prefix = tr("New session layout: ");
++                        let prefix_len = layout_prefix.chars().count();
++                        let layout_suffix = tr("(Search and select from list, <ENTER> when done)");
++                        let enter_off = layout_suffix
++                            .find("<ENTER>")
++                            .map(|p| layout_suffix[..p].chars().count())
++                            .unwrap_or(0);
+                         let layout_indication_line = if width > 73 + search_term_len {
+                             Text::from(format!(
+-                                "New session layout: {}_ (Search and select from list, <ENTER> when done)",
+-                                layout_search_term
++                                "{}{}_ {}",
++                                layout_prefix, layout_search_term, layout_suffix
+                             ))
+-                            .color_range(2, ..20 + search_term_len)
+-                            .color_range(3, 20..20 + search_term_len)
+-                            .color_range(3, 52 + search_term_len..59 + search_term_len)
++                            .color_range(2, ..prefix_len + search_term_len)
++                            .color_range(3, prefix_len..prefix_len + search_term_len)
++                            .color_range(
++                                3,
++                                prefix_len + 2 + search_term_len + enter_off
++                                    ..prefix_len + 9 + search_term_len + enter_off,
++                            )
+                         } else {
+-                            Text::from(format!(
+-                                "New session layout: {}_ <ENTER>",
+-                                layout_search_term
+-                            ))
+-                            .color_range(2, ..20 + search_term_len)
+-                            .color_range(3, 20..20 + search_term_len)
+-                            .color_range(3, 22 + search_term_len..)
++                            Text::from(format!("{}{}_ <ENTER>", layout_prefix, layout_search_term))
++                            .color_range(2, ..prefix_len + search_term_len)
++                            .color_range(3, prefix_len..prefix_len + search_term_len)
++                            .color_range(3, prefix_len + 2 + search_term_len..)
+                         };
+                         print_text_with_coordinates(layout_indication_line, x, y + 2, None, None);
+ 
+@@ -1318,7 +1327,7 @@ impl State {
+                         .with_plugin_url("filepicker")
+                         .with_plugin_config(config)
+                         .new_plugin_instance_should_have_pane_title(
+-                            "Select folder for the new session...",
++                            tr("Select folder for the new session..."),
+                         )
+                         .new_plugin_instance_should_be_focused()
+                         .with_args(args),
+@@ -1360,7 +1369,7 @@ impl State {
+                             );
+                         },
+                         Err(e) => {
+-                            self.show_error(&format!("Failed to kill sessions: {}", e));
++                            self.show_error(&trf("Failed to kill sessions: {err}", &[("err", e.to_string().as_str())]));
+                         },
+                     }
+                     self.show_kill_all_sessions_warning = false;
+@@ -1451,18 +1460,18 @@ impl State {
+                                 );
+                             },
+                             Err(e) => {
+-                                self.show_error(&format!("Failed to kill session: {}", e));
++                                self.show_error(&trf("Failed to kill session: {err}", &[("err", e.to_string().as_str())]));
+                             },
+                         }
+                     } else {
+-                        self.show_error("Must select session before killing it.");
++                        self.show_error(tr("Must select session before killing it."));
+                     }
+                     should_render = true;
+                 },
+                 BareKey::Char('d') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
+                     let all_other_sessions = self.sessions.all_other_sessions();
+                     if all_other_sessions.is_empty() {
+-                        self.show_error("No other sessions to kill. Quit to kill the current one.");
++                        self.show_error(tr("No other sessions to kill. Quit to kill the current one."));
+                     } else {
+                         self.show_kill_all_sessions_warning = true;
+                     }
+@@ -1501,7 +1510,7 @@ impl State {
+                     if !self.is_welcome_screen {
+                         // we don't want to save welcome screen sessions
+                         if let Err(e) = save_session() {
+-                            self.show_error(&format!("Couldn't save session: {}", e));
++                            self.show_error(&trf("Couldn't save session: {err}", &[("err", e.to_string().as_str())]));
+                         }
+                     }
+                 },
+@@ -1625,7 +1634,7 @@ impl State {
+                                 .restore_selection_after_delete(previous_index);
+                         },
+                         Err(e) => {
+-                            self.show_error(&format!("Failed to kill sessions: {}", e));
++                            self.show_error(&trf("Failed to kill sessions: {err}", &[("err", e.to_string().as_str())]));
+                         },
+                     }
+                     self.show_kill_all_sessions_warning = false;
+@@ -1749,7 +1758,7 @@ impl State {
+                     Some(DeleteTarget::Active(name))
+                         if self.session_name.as_deref() == Some(name.as_str()) =>
+                     {
+-                        self.show_error("This is the current session. Quit to stop it.");
++                        self.show_error(tr("This is the current session. Quit to stop it."));
+                     },
+                     Some(DeleteTarget::Active(name)) => {
+                         self.pending_session_stop = Some(name);
+@@ -1761,7 +1770,7 @@ impl State {
+             },
+             BareKey::Delete if key.has_only_modifiers(&[KeyModifier::Shift]) => {
+                 if self.exited_session_count() == 0 {
+-                    self.show_error("There are no exited sessions to delete.");
++                    self.show_error(tr("There are no exited sessions to delete."));
+                 } else {
+                     self.pending_delete_exited = true;
+                 }
+@@ -1770,7 +1779,7 @@ impl State {
+             BareKey::Char('d') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
+                 let all_other_sessions = self.sessions.all_other_sessions();
+                 if all_other_sessions.is_empty() {
+-                    self.show_error("No other sessions to kill. Quit to kill the current one.");
++                    self.show_error(tr("No other sessions to kill. Quit to kill the current one."));
+                 } else {
+                     self.show_kill_all_sessions_warning = true;
+                 }
+@@ -1779,7 +1788,7 @@ impl State {
+             BareKey::Char('a') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
+                 if !self.is_welcome_screen && !app_panel::is_enabled() {
+                     if let Err(e) = save_session() {
+-                        self.show_error(&format!("Couldn't save session: {}", e));
++                        self.show_error(&trf("Couldn't save session: {err}", &[("err", e.to_string().as_str())]));
+                     }
+                 }
+             },
+@@ -1853,7 +1862,7 @@ impl State {
+                         .with_plugin_url("filepicker")
+                         .with_plugin_config(config)
+                         .new_plugin_instance_should_have_pane_title(
+-                            "Select folder for the new session...",
++                            tr("Select folder for the new session..."),
+                         )
+                         .new_plugin_instance_should_be_focused()
+                         .with_args(args),
+@@ -1880,16 +1889,16 @@ impl State {
+                     // TODO: get this from Zellij (for reference: this is part of the interprocess
+                     // package, we should get if from there if possible because it's configurable
+                     // through the package)
+-                    self.show_error("Session name must be shorter than 108 bytes");
++                    self.show_error(tr("Session name must be shorter than 108 bytes"));
+                     return;
+                 } else if self.new_session_info.name().contains('/') {
+-                    self.show_error("Session name cannot contain '/'");
++                    self.show_error(tr("Session name cannot contain '/'"));
+                     return;
+                 } else if self
+                     .sessions
+                     .has_forbidden_session(self.new_session_info.name())
+                 {
+-                    self.show_error("This session exists and web clients cannot attach to it.");
++                    self.show_error(tr("This session exists and web clients cannot attach to it."));
+                     return;
+                 }
+                 self.new_session_info.handle_selection(&self.session_name);
+@@ -1897,23 +1906,23 @@ impl State {
+             ActiveScreen::AttachToSession => {
+                 if let Some(renaming_session_name) = &self.renaming_session_name.take() {
+                     if renaming_session_name.is_empty() {
+-                        self.show_error("New name must not be empty.");
++                        self.show_error(tr("New name must not be empty."));
+                         return; // so that we don't hide self
+                     } else if self.session_name.as_ref() == Some(renaming_session_name) {
+                         // noop - we're already called that!
+                         return; // so that we don't hide self
+                     } else if self.sessions.has_session(&renaming_session_name) {
+-                        self.show_error("A session by this name already exists.");
++                        self.show_error(tr("A session by this name already exists."));
+                         return; // so that we don't hide self
+                     } else if self
+                         .resurrectable_sessions
+                         .has_session(&renaming_session_name)
+                     {
+-                        self.show_error("A resurrectable session by this name already exists.");
++                        self.show_error(tr("A resurrectable session by this name already exists."));
+                         return; // s that we don't hide self
+                     } else {
+                         if renaming_session_name.contains('/') {
+-                            self.show_error("Session names cannot contain '/'");
++                            self.show_error(tr("Session names cannot contain '/'"));
+                             return;
+                         }
+                         self.update_current_session_name_in_ui(&renaming_session_name);
+@@ -1936,7 +1945,7 @@ impl State {
+                         } else if let Some(tab_position) = selected_tab {
+                             go_to_tab(tab_position as u32);
+                         } else {
+-                            self.show_error("Already attached...");
++                            self.show_error(tr("Already attached..."));
+                         }
+                     } else {
+                         switch_session_with_focus(
+@@ -1979,22 +1988,22 @@ impl State {
+                 // Handle rename
+                 if let Some(renaming_session_name) = &self.renaming_session_name.take() {
+                     if renaming_session_name.is_empty() {
+-                        self.show_error("New name must not be empty.");
++                        self.show_error(tr("New name must not be empty."));
+                         return;
+                     } else if self.session_name.as_ref() == Some(renaming_session_name) {
+                         return;
+                     } else if self.sessions.has_session(&renaming_session_name) {
+-                        self.show_error("A session by this name already exists.");
++                        self.show_error(tr("A session by this name already exists."));
+                         return;
+                     } else if self
+                         .resurrectable_sessions
+                         .has_session(&renaming_session_name)
+                     {
+-                        self.show_error("A resurrectable session by this name already exists.");
++                        self.show_error(tr("A resurrectable session by this name already exists."));
+                         return;
+                     } else {
+                         if renaming_session_name.contains('/') {
+-                            self.show_error("Session names cannot contain '/'");
++                            self.show_error(tr("Session names cannot contain '/'"));
+                             return;
+                         }
+                         self.update_current_session_name_in_ui(&renaming_session_name);
+@@ -2019,7 +2028,7 @@ impl State {
+                                             self.panel.report_size();
+                                             switched_session = true;
+                                         } else {
+-                                            self.show_error("Already attached...");
++                                            self.show_error(tr("Already attached..."));
+                                         }
+                                     } else {
+                                         self.open_session(&session_name, true);
+@@ -2046,16 +2055,16 @@ impl State {
+ 
+                             // Validate name
+                             if typed_name.len() >= 108 {
+-                                self.show_error("Session name must be shorter than 108 bytes");
++                                self.show_error(tr("Session name must be shorter than 108 bytes"));
+                                 return;
+                             }
+                             if typed_name.contains('/') {
+-                                self.show_error("Session name cannot contain '/'");
++                                self.show_error(tr("Session name cannot contain '/'"));
+                                 return;
+                             }
+                             if self.sessions.has_forbidden_session(&typed_name) {
+                                 self.show_error(
+-                                    "This session exists and web clients cannot attach to it.",
++                                    tr("This session exists and web clients cannot attach to it."),
+                                 );
+                                 return;
+                             }
+@@ -2063,7 +2072,7 @@ impl State {
+                             // Check exact match against active sessions
+                             if self.sessions.has_session(&typed_name) {
+                                 if self.session_name.as_deref() == Some(&typed_name) {
+-                                    self.show_error("Already attached...");
++                                    self.show_error(tr("Already attached..."));
+                                 } else {
+                                     self.open_session(&typed_name, true);
+                                     if self.is_welcome_screen {
+@@ -2271,11 +2280,11 @@ impl State {
+     fn render_single_screen_folder_prompt(&self, x: usize, y: usize, max_cols: usize) {
+         match self.single_screen_state.new_session_folder.as_ref() {
+             Some(new_session_folder) => {
+-                let folder_prompt = "New session folder:";
++                let folder_prompt = tr("New session folder:");
+                 let new_session_folder_str = new_session_folder.display().to_string();
+                 let change_folder_shortcut = self.colors.shortcuts("<Ctrl f>");
+                 let reset_folder_shortcut = self.colors.shortcuts("<Ctrl c>");
+-                if max_cols >= folder_prompt.len() + new_session_folder_str.len() + 30 {
++                if max_cols >= zellij_tile::graphemes::display_width(folder_prompt) + zellij_tile::graphemes::display_width(&new_session_folder_str) + 30 {
+                     print!(
+                         "\u{1b}[m\u{1b}[{};{}H{} {} ({} to change, {} to reset)",
+                         y + 1,
+@@ -2300,7 +2309,7 @@ impl State {
+                 }
+             },
+             None => {
+-                let folder_prompt = "New session folder:";
++                let folder_prompt = tr("New session folder:");
+                 let change_folder_shortcut = self.colors.shortcuts("<Ctrl f>");
+                 print!(
+                     "\u{1b}[m\u{1b}[{};{}H{} ({} to set)",
+@@ -2334,7 +2343,7 @@ impl State {
+                     .restore_selection_after_delete(previous_index);
+             },
+             Err(e) => {
+-                self.show_error(&format!("Failed to delete session: {}", e));
++                self.show_error(&trf("Failed to delete session: {err}", &[("err", e.to_string().as_str())]));
+             },
+         }
+     }
+@@ -2356,7 +2365,7 @@ impl State {
+                     .restore_selection_after_delete(previous_index);
+             },
+             Err(e) => {
+-                self.show_error(&format!("Failed to delete the exited sessions: {}", e));
++                self.show_error(&trf("Failed to delete the exited sessions: {err}", &[("err", e.to_string().as_str())]));
+             },
+         }
+     }
+@@ -2372,14 +2381,14 @@ impl State {
+         }
+         let session_count = self.sessions.all_other_sessions().len();
+         let session_count_len = session_count.to_string().chars().count();
+-        let warning_description_text = format!("This will kill {} active sessions", session_count);
+-        let confirmation_text = "Are you sure? (y/n)";
++        let warning_description_text = trf("This will kill {count} active sessions", &[("count", session_count.to_string().as_str())]);
++        let confirmation_text = tr("Are you sure? (y/n)");
+         let warning_y_location = y + (rows / 2).saturating_sub(1);
+         let confirmation_y_location = y + (rows / 2) + 1;
+         let warning_x_location =
+-            x + columns.saturating_sub(warning_description_text.chars().count()) / 2;
++            x + columns.saturating_sub(zellij_tile::graphemes::display_width(&warning_description_text)) / 2;
+         let confirmation_x_location =
+-            x + columns.saturating_sub(confirmation_text.chars().count()) / 2;
++            x + columns.saturating_sub(zellij_tile::graphemes::display_width(&confirmation_text)) / 2;
+         print_text_with_coordinates(
+             Text::from(warning_description_text).color_range(0, 15..16 + session_count_len),
+             warning_x_location,
+@@ -2399,19 +2408,19 @@ impl State {
+ 
+ pub(crate) fn stop_session_warning_lines(name: &str) -> (String, String) {
+     (
+-        format!("This will stop the session {}", sanitize_display_text(name)),
+-        "Are you sure? (y/n)".to_owned(),
++        trf("This will stop the session {name}", &[("name", sanitize_display_text(name).as_str())]),
++        tr("Are you sure? (y/n)").to_owned(),
+     )
+ }
+ 
+ pub(crate) fn delete_exited_warning_lines(count: usize) -> (String, String) {
+     (
+-        format!(
+-            "This will delete all {} exited {}",
+-            count,
+-            if count == 1 { "session" } else { "sessions" }
+-        ),
+-        "Are you sure? (y/n)".to_owned(),
++        if count == 1 {
++            trf("This will delete all {count} exited session", &[("count", count.to_string().as_str())])
++        } else {
++            trf("This will delete all {count} exited sessions", &[("count", count.to_string().as_str())])
++        },
++        tr("Are you sure? (y/n)").to_owned(),
+     )
+ }
+ 
+@@ -2420,10 +2429,10 @@ fn render_delete_exited_warning(count: usize, rows: usize, columns: usize, x: us
+         return;
+     }
+     let (warning, confirmation) = delete_exited_warning_lines(count);
+-    let count_start = "This will delete all ".chars().count();
++    let count_start = warning.chars().take_while(|c| !c.is_ascii_digit()).count();
+     let count_end = count_start + count.to_string().chars().count();
+-    let warning_x = x + columns.saturating_sub(warning.chars().count()) / 2;
+-    let confirmation_x = x + columns.saturating_sub(confirmation.chars().count()) / 2;
++    let warning_x = x + columns.saturating_sub(zellij_tile::graphemes::display_width(&warning)) / 2;
++    let confirmation_x = x + columns.saturating_sub(zellij_tile::graphemes::display_width(&confirmation)) / 2;
+     print_text_with_coordinates(
+         Text::from(warning.as_str()).color_range(0, count_start..count_end),
+         warning_x,
+@@ -2445,9 +2454,9 @@ fn render_stop_session_warning(name: &str, rows: usize, columns: usize, x: usize
+         return;
+     }
+     let (warning, confirmation) = stop_session_warning_lines(name);
+-    let prefix_len = "This will stop the session ".chars().count();
+-    let warning_x = x + columns.saturating_sub(warning.chars().count()) / 2;
+-    let confirmation_x = x + columns.saturating_sub(confirmation.chars().count()) / 2;
++    let prefix_len = tr("This will stop the session ").chars().count();
++    let warning_x = x + columns.saturating_sub(zellij_tile::graphemes::display_width(&warning)) / 2;
++    let confirmation_x = x + columns.saturating_sub(zellij_tile::graphemes::display_width(&confirmation)) / 2;
+     print_text_with_coordinates(
+         Text::from(warning.as_str()).color_range(0, prefix_len..warning.chars().count()),
+         warning_x,
+@@ -2466,14 +2475,14 @@ fn render_stop_session_warning(name: &str, rows: usize, columns: usize, x: usize
+ 
+ fn remote_window_warning_lines(remote: &str, leave: bool) -> Vec<String> {
+     let mut lines = vec![
+-        format!("You are connected {}.", remote),
++        trf("You are connected {remote}.", &[("remote", remote.to_string().as_str())]),
+         String::new(),
+-        "The window opens on the desktop of the machine running Zellij.".to_owned(),
+-        "If you are typing on another machine, you will not see it.".to_owned(),
++        tr("The window opens on the desktop of the machine running Zellij.").to_owned(),
++        tr("If you are typing on another machine, you will not see it.").to_owned(),
+     ];
+     if leave {
+         lines.push(String::new());
+-        lines.push("Detaching here also ends this connection to Zellij:".to_owned());
++        lines.push(tr("Detaching here also ends this connection to Zellij:").to_owned());
+         lines.push("you will be left with nothing on your screen.".to_owned());
+     }
+     lines.push(String::new());
+@@ -2628,10 +2637,10 @@ impl State {
+             (name, _, _) => {
+                 if let Some(name) = name {
+                     if name.len() >= 108 {
+-                        return Err("Session name must be shorter than 108 bytes".to_owned());
++                        return Err(tr("Session name must be shorter than 108 bytes").to_owned());
+                     }
+                     if name.contains('/') {
+-                        return Err("Session name cannot contain '/'".to_owned());
++                        return Err(tr("Session name cannot contain '/'").to_owned());
+                     }
+                 }
+                 Ok(SessionTerminalRequest::new_session(
+@@ -2783,7 +2792,7 @@ impl State {
+         }
+         let typed = self.single_screen_state.search_term.clone();
+         if typed.contains('/') || typed.len() >= 108 {
+-            self.show_error("Session names must be shorter than 108 bytes and cannot contain '/'");
++            self.show_error(tr("Session names must be shorter than 108 bytes and cannot contain '/'"));
+             return true;
+         }
+         let name = if typed.is_empty() {
+@@ -2927,12 +2936,12 @@ impl State {
+             ));
+         }
+         if has_window_hints && self.remote_client.is_some() {
+-            hints.push(help::hint("(!)", "windows open on the Zellij machine"));
++            hints.push(help::hint("(!)", tr("windows open on the Zellij machine")));
+         }
+         hints
+     }
+     fn layout_window_hints(&self) -> Vec<help::Hint> {
+-        let mut hints = vec![help::hint("<Alt w>", "create it in a window")];
++        let mut hints = vec![help::hint("<Alt w>", tr("create it in a window"))];
+         if self.can_close_this_window() {
+             hints.push(help::hint(
+                 "<Alt d>",
+@@ -2940,77 +2949,76 @@ impl State {
+             ));
+         }
+         if self.remote_client.is_some() {
+-            hints.push(help::hint("(!)", "windows open on the Zellij machine"));
++            hints.push(help::hint("(!)", tr("windows open on the Zellij machine")));
+         }
+         hints
+     }
+     fn sessions_hints(&self, all: bool) -> Vec<help::Hint> {
+         use help::hint;
+         if self.renaming_session_name.is_some() {
+-            return vec![hint("<ENTER>", "rename"), hint("<ESC>", "cancel")];
++            return vec![hint("<ENTER>", tr("rename")), hint("<ESC>", tr("cancel"))];
+         }
+         if self.show_kill_all_sessions_warning
+             || self.pending_delete_exited
+             || self.pending_session_stop.is_some()
+         {
+-            return vec![hint("<y>", "confirm"), hint("<n>", "cancel")];
++            return vec![hint("<y>", tr("confirm")), hint("<n>", tr("cancel"))];
+         }
+         let mut hints = vec![];
+         if self.single_screen_state.mode == SingleScreenMode::SelectingLayout {
+-            hints.push(hint("<ENTER>", "create with this layout"));
+-            hints.push(hint("<↓↑>", "select a layout"));
+-            hints.push(hint("<ESC>", "back"));
++            hints.push(hint("<ENTER>", tr("create with this layout")));
++            hints.push(hint("<↓↑>", tr("select a layout")));
++            hints.push(hint("<ESC>", tr("back")));
+             hints.extend(self.layout_window_hints());
+-            hints.push(hint("<type>", "filter layouts"));
+-            hints.push(hint("<Ctrl f>", "choose a folder"));
+-            hints.push(hint("<Ctrl c>", "reset the folder"));
++            hints.push(hint("<type>", tr("filter layouts")));
++            hints.push(hint("<Ctrl f>", tr("choose a folder")));
++            hints.push(hint("<Ctrl c>", tr("reset the folder")));
+             return hints;
+         }
+         if let Some(action) = self.enter_action() {
+             hints.push(hint("<ENTER>", action.to_lowercase()));
+         }
+-        hints.push(hint("<↓↑>", "select"));
++        hints.push(hint("<↓↑>", tr("select")));
+         if !self.is_welcome_screen {
+-            hints.push(hint("<ESC>", "close"));
++            hints.push(hint("<ESC>", tr("close")));
+         }
+         let target = self.sessions_open_target();
+         hints.extend(self.open_way_hints(Some(&target), false));
+-        hints.push(hint("<type>", "search, or name a new session"));
+-        hints.push(hint("<←→>", "show tabs and panes"));
+-        hints.push(hint("<Ctrl l>", "new session with a layout"));
+-        hints.push(hint("<Ctrl r>", "rename this session"));
+-        hints.push(hint("<Del>", "stop or delete the selected session"));
++        hints.push(hint("<type>", tr("search, or name a new session")));
++        hints.push(hint("<←→>", tr("show tabs and panes")));
++        hints.push(hint("<Ctrl l>", tr("new session with a layout")));
++        hints.push(hint("<Ctrl r>", tr("rename this session")));
++        hints.push(hint("<Del>", tr("stop or delete the selected session")));
+         if self.exited_session_count() > 0 {
+-            hints.push(hint("<Shift Del>", "delete all exited sessions"));
++            hints.push(hint("<Shift Del>", tr("delete all exited sessions")));
+         }
+         if !app_panel::is_enabled() && !self.is_welcome_screen {
+             hints.push(hint(
+                 "<Ctrl a>",
+-                format!(
+-                    "save this session {}",
+-                    ui::components::saved_text(self.current_session_last_saved_time)
++                trf(
++                    "save this session {state}",
++                    &[("state", ui::components::saved_text(self.current_session_last_saved_time).as_str())]
+                 ),
+             ));
+         }
+         if self.sessions_live_target().is_some() {
+             hints.push(hint(
+-                inbox::TYPE_KEY,
+-                "type into the shown pane (again to stop)",
++                inbox::TYPE_KEY, tr("type into the shown pane (again to stop)"),
+             ));
+-            hints.push(hint("<click the view>", "type into the shown pane"));
++            hints.push(hint(tr("<click the view>"), tr("type into the shown pane")));
+             if let Some(stop_key) = self.inbox.stop_typing_key_text() {
+-                hints.push(hint(stop_key, "stop typing (or click outside the view)"));
++                hints.push(hint(stop_key, tr("stop typing (or click outside the view)")));
+             }
+         }
+         if self.selected_session_is_exited() {
+-            hints.push(hint("<Shift ←↓↑→>", "scroll the preview"));
++            hints.push(hint("<Shift ←↓↑→>", tr("scroll the preview")));
+         }
+         if all {
+             if self.shows_browser_tabs() {
+-                hints.push(hint("<TAB>", "switch to the inbox"));
++                hints.push(hint("<TAB>", tr("switch to the inbox")));
+             }
+-            hints.push(hint("<Ctrl c>", "clear the search"));
+-            hints.push(hint("<F1>", "this list"));
++            hints.push(hint("<Ctrl c>", tr("clear the search")));
++            hints.push(hint("<F1>", tr("this list")));
+         }
+         hints
+     }
+@@ -3020,10 +3028,10 @@ impl State {
+         if !all {
+             if self.desktop_offer.shown {
+                 return vec![
+-                    hint("", "Get desktop notifications for this:"),
+-                    hint("<Alt w>", "open in a window (it opens on this computer)"),
+-                    hint("<x>", "don't show again"),
+-                    hint("<ESC>", "close"),
++                    hint("", tr("Get desktop notifications for this:")),
++                    hint("<Alt w>", tr("open in a window (it opens on this computer)")),
++                    hint("<x>", tr("don't show again")),
++                    hint("<ESC>", tr("close")),
+                 ];
+             }
+             let mut hints: Vec<help::Hint> = self
+@@ -3031,12 +3039,12 @@ impl State {
+                 .into_iter()
+                 .filter(|h| h.key == "<Alt w>")
+                 .collect();
+-            hints.push(hint("<↓↑>", "select"));
++            hints.push(hint("<↓↑>", tr("select")));
+             if self.shows_browser_tabs() {
+-                hints.push(hint("<TAB>", "sessions"));
++                hints.push(hint("<TAB>", tr("sessions")));
+             }
+-            hints.push(hint("<ESC>", "close"));
+-            hints.push(hint("<?>", "all keys"));
++            hints.push(hint("<ESC>", tr("close")));
++            hints.push(hint("<?>", tr("all keys")));
+             return hints;
+         }
+         let item = self.inbox.selected_target();
+@@ -3044,81 +3052,81 @@ impl State {
+         let watched = item.map(|i| i.item.attention.watched).unwrap_or(false);
+         let mut hints = if self.inbox.live_mode {
+             let mut live_hints = vec![
+-                hint("<ENTER>", "go to the pane"),
+-                hint(inbox::TYPE_KEY, "type into the shown pane (again to stop)"),
+-                hint("<click the view>", "type into the shown pane"),
++                hint("<ENTER>", tr("go to the pane")),
++                hint(inbox::TYPE_KEY, tr("type into the shown pane (again to stop)")),
++                hint(tr("<click the view>"), tr("type into the shown pane")),
+                 hint(
+                     "<z>",
+-                    format!(
+-                        "resize the pane to the view ({})",
+-                        if self.inbox.current_resize_allowed() {
+-                            "on"
++                    trf(
++                        "resize the pane to the view ({state})",
++                        &[("state", if self.inbox.current_resize_allowed() {
++                            tr_ctx("on (toggle)", "on")
+                         } else {
+-                            "off"
+-                        }
++                            tr_ctx("off (toggle)", "off")
++                        })],
+                     ),
+                 ),
+             ];
+             if let Some(stop_key) = self.inbox.stop_typing_key_text() {
+-                live_hints.push(hint(stop_key, "stop typing (or click outside the view)"));
++                live_hints.push(hint(stop_key, tr("stop typing (or click outside the view)")));
+             }
+             live_hints.push(hint(
+                 "<w>",
+                 if self.inbox.wide_list {
+-                    "narrow the list"
++                    tr("narrow the list")
+                 } else {
+-                    "widen the list"
++                    tr("widen the list")
+                 },
+             ));
+             live_hints
+         } else {
+-            vec![hint("<ENTER>", "go to the pane")]
++            vec![hint("<ENTER>", tr("go to the pane"))]
+         };
+         hints.extend([
+-            hint("<↓↑>", "select"),
++            hint("<↓↑>", tr("select")),
+             hint(
+                 "<c>",
+                 if self.inbox.selected_is_recalled() {
+-                    "forget (until the pane reports again)"
++                    tr("forget (until the pane reports again)")
+                 } else {
+-                    "dismiss (mark seen)"
++                    tr("dismiss (mark seen)")
+                 },
+             ),
+-            hint("<ESC>", "close"),
+-            hint("<m>", if muted { "unmute" } else { "mute" }),
++            hint("<ESC>", tr("close")),
++            hint("<m>", if muted { tr("unmute") } else { tr("mute") }),
+             hint(
+                 "<n>",
+                 if watched {
+-                    "stop watching"
++                    tr("stop watching")
+                 } else {
+-                    "watch (notify me)"
++                    tr("watch (notify me)")
+                 },
+             ),
+-            hint("<C>", "dismiss everything"),
++            hint("<C>", tr("dismiss everything")),
+         ]);
+         hints.extend(self.open_way_hints(target.as_ref(), true));
+-        let on_off = |on: bool| if on { "on" } else { "off" };
++        let on_off = |on: bool| if on { tr_ctx("on (toggle)", "on") } else { tr_ctx("off (toggle)", "off") };
+         hints.push(hint(
+             "<f>",
+-            format!("this session only ({})", on_off(self.inbox.only_here)),
++            trf("this session only ({state})", &[("state", on_off(self.inbox.only_here))]),
+         ));
+         hints.push(hint(
+             "<s>",
+             if self.inbox.group_by_session {
+-                "group by status"
++                tr("group by status")
+             } else {
+-                "group by session"
++                tr("group by session")
+             },
+         ));
+         hints.push(hint(
+             "<a>",
+-            format!(
+-                "show items with only new output, quiet or muted ({})",
+-                on_off(self.inbox.show_quiet)
++            trf(
++                "show items with only new output, quiet or muted ({state})",
++                &[("state", on_off(self.inbox.show_quiet))]
+             ),
+         ));
+-        hints.push(hint("<TAB>", "switch to sessions"));
+-        hints.push(hint("<?>", "this list"));
++        hints.push(hint("<TAB>", tr("switch to sessions")));
++        hints.push(hint("<?>", tr("this list")));
+         hints
+     }
+     fn all_keys(&self) -> Vec<help::Hint> {
+@@ -5247,3 +5255,4 @@ mod sessions_live_view_tests {
+             .any(|row| row.session == "here"));
+     }
+ }
++
+diff --git a/default-plugins/session-manager/src/panel.rs b/default-plugins/session-manager/src/panel.rs
+index 03a5b42..27ed549 100644
+--- a/default-plugins/session-manager/src/panel.rs
++++ b/default-plugins/session-manager/src/panel.rs
+@@ -1,25 +1,25 @@
+ use std::collections::BTreeMap;
+ use zellij_tile::graphemes;
+ use zellij_tile::prelude::*;
++use zellij_i18n::{tr, trf};
+ 
+ use crate::app_panel::close_self;
+ 
+ pub const CARD_MAX_WIDTH: usize = 72;
+ pub const CARD_PADDING: usize = 1;
++#[cfg(test)]
+ pub const CARD_EMPTY_TEXT: &str = "No other sessions yet";
++#[cfg(test)]
+ pub const CARD_NO_LIVE_TEXT: &str = "No other live sessions";
+ pub const MANAGER_SUGGESTION_LIMIT: usize = 500;
+ pub const PANEL_SIZE_PIPE: &str = "session_panel_size";
++#[cfg(test)]
+ pub const SHOW_ALL_TEXT: &str = "Show all and previews ›";
+ pub const SHOW_ALL_SHORTCUT: &str = "<Ctrl f>";
+-pub const CARD_TITLE: &str = "Running Sessions";
+ pub const CARD_SHORTCUT_WIDTH: usize = 4;
+ pub const CARD_MIN_LIST_ROWS: usize = 5;
+ pub const CARD_SCROLL_MARGIN: usize = 2;
+-pub const NO_OTHER_SESSIONS_TEXT: &str = "No other sessions.";
+ pub const CURRENT_SESSION_LABEL: &str = "here";
+-pub const EMPTY_PREVIEW_TEXT: &str = "Select a session to see its preview";
+-pub const EMPTY_PREVIEW_HINT: &str = "You can do this by navigating with ";
+ pub const NAVIGATE_KEYS: &str = "<←↓↑→>";
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+@@ -249,9 +249,9 @@ impl Panel {
+ 
+     pub fn card_empty_text(&self) -> &'static str {
+         if self.card_resumable_count() > 0 {
+-            CARD_NO_LIVE_TEXT
++            tr("No other live sessions")
+         } else {
+-            CARD_EMPTY_TEXT
++            tr("No other sessions yet")
+         }
+     }
+ 
+@@ -389,7 +389,7 @@ impl Panel {
+             .max(graphemes::display_width(&self.card_empty_text()))
+             .max(footer_width + 2)
+             .max(
+-                graphemes::display_width(&CARD_TITLE)
++                graphemes::display_width(&tr("Running Sessions"))
+                     + CARD_SHORTCUT_WIDTH
+                     + 3
+                     + graphemes::display_width(&" × "),
+@@ -407,9 +407,9 @@ impl Panel {
+ 
+     pub fn show_all_text(&self) -> String {
+         if self.popup_focused {
+-            format!("{} {}", SHOW_ALL_SHORTCUT, SHOW_ALL_TEXT)
++            format!("{} {}", SHOW_ALL_SHORTCUT, tr("Show all and previews ›"))
+         } else {
+-            SHOW_ALL_TEXT.to_owned()
++            tr("Show all and previews ›").to_owned()
+         }
+     }
+ 
+@@ -482,7 +482,7 @@ pub fn format_age(seconds: u64) -> String {
+ }
+ 
+ fn age_text(suggestion: &SessionSuggestion) -> String {
+-    format!("{} ago", format_age(suggestion.last_used_secs_ago))
++    trf("{t} ago", &[("t", format_age(suggestion.last_used_secs_ago).as_str())])
+ }
+ 
+ pub fn shorten_path(path: &str, max_width: usize) -> String {
+@@ -1108,21 +1108,23 @@ pub fn render_preview(
+     let mut summary: Option<String> = None;
+     if let Some(preview) = panel.preview.as_ref() {
+         if let Some(error) = &preview.error {
+-            body.push(format!("Preview unavailable: {}", error));
++            body.push(trf("Preview unavailable: {err}", &[("err", error.as_str())]));
+         } else {
+             body.extend(preview_lines(&preview.contents));
+         }
+         if preview.error.is_none() {
+-            summary = Some(format!(
+-                "Tabs: {}  Panes: {}  Clients attached: {}",
+-                preview.tab_names.len(),
+-                preview.pane_count,
+-                preview.connected_clients
++            summary = Some(trf(
++                "Tabs: {tabs}  Panes: {panes}  Clients attached: {clients}",
++                &[
++                    ("tabs", preview.tab_names.len().to_string().as_str()),
++                    ("panes", preview.pane_count.to_string().as_str()),
++                    ("clients", preview.connected_clients.to_string().as_str()),
++                ],
+             ));
+         }
+     } else if let Some(saved) = panel.saved_preview.as_ref() {
+         if let Some(error) = &saved.error {
+-            body.push(format!("Preview unavailable: {}", error));
++            body.push(trf("Preview unavailable: {err}", &[("err", error.as_str())]));
+         } else {
+             let tab_index = panel
+                 .preview_tab
+@@ -1141,11 +1143,13 @@ pub fn render_preview(
+                 }
+             }
+             let pane_count: usize = saved.tabs.iter().map(|t| t.panes.len()).sum();
+-            summary = Some(format!(
+-                "Folder: {}  Tabs: {}  Panes: {}",
+-                saved.folder.as_deref().unwrap_or("—"),
+-                saved.tabs.len(),
+-                pane_count
++            summary = Some(trf(
++                "Folder: {folder}  Tabs: {tabs}  Panes: {panes}",
++                &[
++                    ("folder", saved.folder.as_deref().unwrap_or("—")),
++                    ("tabs", saved.tabs.len().to_string().as_str()),
++                    ("panes", pane_count.to_string().as_str()),
++                ],
+             ));
+             let commands: Vec<String> = saved
+                 .tabs
+@@ -1153,14 +1157,14 @@ pub fn render_preview(
+                 .flat_map(|t| t.panes.iter().filter_map(|p| p.command.clone()))
+                 .collect();
+             if !commands.is_empty() {
+-                details.push(Text::from("Commands that will run again:").color_range(2, ..));
++                details.push(Text::from(tr("Commands that will run again:")).color_range(2, ..));
+                 for command in commands {
+                     details.push(Text::from(format!("  {}", command)).color_range(0, ..));
+                 }
+             }
+         }
+     } else {
+-        body.push(EMPTY_PREVIEW_TEXT.to_owned());
++        body.push(tr("Select a session to see its preview").to_owned());
+     }
+     let max_details = height.saturating_sub(2) / 3;
+     let details_height = details.len().min(max_details);
+@@ -1236,7 +1240,7 @@ fn render_empty_preview(x: usize, y: usize, width: usize, height: usize) {
+         Some(width),
+         None,
+     );
+-    let message = EMPTY_PREVIEW_TEXT;
++    let message = tr("Select a session to see its preview");
+     let message_width = graphemes::display_width(&message).min(inner_width);
+     let message_x = x + 1 + inner_width.saturating_sub(message_width) / 2;
+     let message_y = y + height.saturating_sub(1) / 2;
+@@ -1247,10 +1251,10 @@ fn render_empty_preview(x: usize, y: usize, width: usize, height: usize) {
+         Some(message_width),
+         None,
+     );
+-    let hint = format!("{}{}", EMPTY_PREVIEW_HINT, NAVIGATE_KEYS);
++    let hint = format!("{}{}", tr("You can do this by navigating with "), NAVIGATE_KEYS);
+     let hint_width = graphemes::display_width(&hint).min(inner_width);
+     let hint_x = x + 1 + inner_width.saturating_sub(hint_width) / 2;
+-    let keys_start = EMPTY_PREVIEW_HINT.chars().count();
++    let keys_start = tr("You can do this by navigating with ").chars().count();
+     print_text_with_coordinates(
+         Text::from(hint).color_range(3, keys_start..),
+         hint_x,
+diff --git a/default-plugins/session-manager/src/resurrectable_sessions.rs b/default-plugins/session-manager/src/resurrectable_sessions.rs
+index 60d5806..5dcdc5a 100644
+--- a/default-plugins/session-manager/src/resurrectable_sessions.rs
++++ b/default-plugins/session-manager/src/resurrectable_sessions.rs
+@@ -1,4 +1,5 @@
+ use fuzzy_matcher::skim::SkimMatcherV2;
++use zellij_i18n::{tr, trf};
+ use fuzzy_matcher::FuzzyMatcher;
+ use humantime::format_duration;
+ 
+@@ -110,8 +111,8 @@ impl ResurrectableSessions {
+         let session_count = self.all_resurrectable_sessions.len();
+         let session_count_len = session_count.to_string().chars().count();
+         let warning_description_text =
+-            format!("This will delete {} resurrectable sessions", session_count,);
+-        let confirmation_text = "Are you sure? (y/n)";
++            trf("This will delete {count} resurrectable sessions", &[("count", session_count.to_string().as_str())]);
++        let confirmation_text = tr("Are you sure? (y/n)");
+         let warning_y_location = y + (rows / 2).saturating_sub(1);
+         let confirmation_y_location = y + (rows / 2) + 1;
+         let warning_x_location =
+@@ -175,7 +176,7 @@ impl ResurrectableSessions {
+             formatted_duration.push_str("<1m");
+         }
+         let duration_len = formatted_duration.chars().count();
+-        Text::from(format!("Created {} ago", formatted_duration))
++        Text::from(trf("Created {t} ago", &[("t", formatted_duration.as_str())]))
+             .color_range(2, 8..9 + duration_len)
+     }
+     fn render_more_indication_or_enter_as_needed(
+@@ -350,3 +351,4 @@ pub struct SearchResult {
+     session_name: String,
+     ctime: Duration,
+ }
++
+diff --git a/default-plugins/session-manager/src/session_list.rs b/default-plugins/session-manager/src/session_list.rs
+index 7d240f0..ae86fb6 100644
+--- a/default-plugins/session-manager/src/session_list.rs
++++ b/default-plugins/session-manager/src/session_list.rs
+@@ -456,3 +456,4 @@ impl SearchResult {
+         self.list_item.render(Some(self.indices.clone()), max_width)
+     }
+ }
++
+diff --git a/default-plugins/session-manager/src/ui/components.rs b/default-plugins/session-manager/src/ui/components.rs
+index 40215f0..6f04cdd 100644
+--- a/default-plugins/session-manager/src/ui/components.rs
++++ b/default-plugins/session-manager/src/ui/components.rs
+@@ -3,6 +3,7 @@ use std::path::PathBuf;
+ use std::time::Duration;
+ use zellij_tile::graphemes;
+ use zellij_tile::prelude::*;
++use zellij_i18n::{tr, trf};
+ 
+ use crate::single_screen::UnifiedSearchResult;
+ use crate::ui::{PaneUiInfo, SessionUiInfo, TabUiInfo};
+@@ -161,16 +162,16 @@ impl UnifiedResultsRenderCache {
+                         formatted_duration.push_str("<1m");
+                     }
+ 
+-                    let full_details = format!("Created {} ago", formatted_duration);
++                    let full_details = trf("Created {t} ago", &[("t", formatted_duration.as_str())]);
+                     let full_details_ranges = {
+-                        let created_len = "Created ".len();
++                        let created_len = tr("Created ").len();
+                         let duration_end = created_len + formatted_duration.len();
+                         DetailsColorRanges {
+                             ranges: vec![(2, created_len..duration_end)],
+                         }
+                     };
+ 
+-                    let abbr_details = format!("{} ago", formatted_duration);
++                    let abbr_details = trf("{t} ago", &[("t", formatted_duration.as_str())]);
+                     let abbr_details_ranges = {
+                         let duration_end = formatted_duration.len();
+                         DetailsColorRanges {
+@@ -601,30 +602,26 @@ pub fn build_session_ui_line(session_ui_info: &SessionUiInfo, colors: Colors) ->
+         session_name.clone(),
+         SpanStyle::ForegroundBold(colors.palette.text_unselected.emphasis_0),
+     ));
+-    let tab_and_pane_count = UiSpan::UiSpanTelescope(UiSpanTelescope::new(vec![
+-        StringAndLength::new(
+-            format!(" ({tab_count_styled} tabs, {total_pane_count_styled} panes)"),
+-            2 + graphemes::display_width(&tab_count)
+-                + 7
+-                + graphemes::display_width(&total_pane_count)
+-                + 7,
+-        ),
+-        StringAndLength::new(
+-            format!(" ({tab_count_styled}, {total_pane_count_styled})"),
+-            2 + graphemes::display_width(&tab_count)
+-                + 2
+-                + graphemes::display_width(&total_pane_count)
+-                + 3,
+-        ),
+-    ]));
++    let tab_and_pane_count = {
++        let counts = [("tab_count_styled", tab_count_styled.as_str()), ("total_pane_count_styled", total_pane_count_styled.as_str())];
++        let plain = [("tab_count_styled", tab_count.as_str()), ("total_pane_count_styled", total_pane_count.as_str())];
++        let long = trf(" ({tab_count_styled} tabs, {total_pane_count_styled} panes)", &counts);
++        let long_len = graphemes::display_width(&trf(" ({tab_count_styled} tabs, {total_pane_count_styled} panes)", &plain));
++        let short = trf(" ({tab_count_styled}, {total_pane_count_styled})", &counts);
++        let short_len = graphemes::display_width(&trf(" ({tab_count_styled}, {total_pane_count_styled})", &plain));
++        UiSpan::UiSpanTelescope(UiSpanTelescope::new(vec![
++            StringAndLength::new(long, long_len),
++            StringAndLength::new(short, short_len),
++        ]))
++    };
+     let connected_users_count = UiSpan::UiSpanTelescope(UiSpanTelescope::new(vec![
+         StringAndLength::new(
+-            format!(" [{connected_users_styled} connected users]"),
+-            2 + graphemes::display_width(&connected_users) + 17,
++            trf(" [{connected_users_styled} connected users]", &[("connected_users_styled", connected_users_styled.as_str())]),
++            graphemes::display_width(&trf(" [{connected_users_styled} connected users]", &[("connected_users_styled", connected_users.as_str())])),
+         ),
+         StringAndLength::new(
+-            format!(" [{connected_users_styled}]"),
+-            2 + graphemes::display_width(&connected_users) + 1,
++            trf(" [{connected_users_styled}]", &[("connected_users_styled", connected_users_styled.as_str())]),
++            graphemes::display_width(&trf(" [{connected_users_styled}]", &[("connected_users_styled", connected_users.as_str())])),
+         ),
+     ]));
+     ui_spans.push(session_bullet_span);
+@@ -634,11 +631,11 @@ pub fn build_session_ui_line(session_ui_info: &SessionUiInfo, colors: Colors) ->
+     if session_ui_info.is_current_session {
+         let current_session_indication = UiSpan::UiSpanTelescope(UiSpanTelescope::new(vec![
+             StringAndLength::new(
+-                colors.current_session_marker(&format!(" <CURRENT SESSION>")),
+-                18,
++                colors.current_session_marker(&tr(" <CURRENT SESSION>").to_string()),
++                graphemes::display_width(tr(" <CURRENT SESSION>")),
+             ),
+-            StringAndLength::new(colors.current_session_marker(&format!(" <CURRENT>")), 10),
+-            StringAndLength::new(colors.current_session_marker(&format!(" <C>")), 4),
++            StringAndLength::new(colors.current_session_marker(&tr(" <CURRENT>").to_string()), graphemes::display_width(tr(" <CURRENT>"))),
++            StringAndLength::new(colors.current_session_marker(&tr(" <C>").to_string()), graphemes::display_width(tr(" <C>"))),
+         ]));
+         ui_spans.push(current_session_indication);
+     }
+@@ -662,12 +659,12 @@ pub fn build_tab_ui_line(tab_ui_info: &TabUiInfo, colors: Colors) -> Vec<UiSpan>
+     ));
+     let connected_users_count_span = UiSpan::UiSpanTelescope(UiSpanTelescope::new(vec![
+         StringAndLength::new(
+-            format!(" ({pane_count_styled} panes)"),
+-            2 + graphemes::display_width(&pane_count) + 7,
++            trf(" ({pane_count_styled} panes)", &[("pane_count_styled", pane_count_styled.as_str())]),
++            graphemes::display_width(&trf(" ({pane_count_styled} panes)", &[("pane_count_styled", pane_count.as_str())])),
+         ),
+         StringAndLength::new(
+-            format!(" ({pane_count_styled})"),
+-            2 + graphemes::display_width(&pane_count) + 1,
++            trf(" ({pane_count_styled})", &[("pane_count_styled", pane_count_styled.as_str())]),
++            graphemes::display_width(&trf(" ({pane_count_styled})", &[("pane_count_styled", pane_count.as_str())])),
+         ),
+     ]));
+     ui_spans.push(tab_bullet_span);
+@@ -680,13 +677,13 @@ pub fn build_pane_ui_line(pane_ui_info: &PaneUiInfo, colors: Colors) -> Vec<UiSp
+     let mut ui_spans = vec![];
+     let pane_name = pane_ui_info.name.clone();
+     let exit_code = pane_ui_info.exit_code.map(|exit_code_number| {
+-        let exit_code = format!("{}", exit_code_number);
++        let exit_code_plain = format!("{}", exit_code_number);
+         let exit_code = if exit_code_number == 0 {
+-            colors.session_and_folder_entry(&exit_code)
++            colors.session_and_folder_entry(&exit_code_plain)
+         } else {
+-            colors.exit_code_error(&exit_code)
++            colors.exit_code_error(&exit_code_plain)
+         };
+-        exit_code
++        (exit_code, exit_code_plain)
+     });
+     let pane_bullet_span =
+         UiSpan::UiSpanTelescope(UiSpanTelescope::new(vec![StringAndLength::new(
+@@ -697,15 +694,15 @@ pub fn build_pane_ui_line(pane_ui_info: &PaneUiInfo, colors: Colors) -> Vec<UiSp
+     let pane_name_span =
+         UiSpan::TruncatableUiSpan(TruncatableUiSpan::new(pane_name, SpanStyle::Bold));
+     ui_spans.push(pane_name_span);
+-    if let Some(exit_code) = exit_code {
++    if let Some((exit_code, exit_code_plain)) = exit_code {
+         let pane_name_span = UiSpan::UiSpanTelescope(UiSpanTelescope::new(vec![
+             StringAndLength::new(
+-                format!(" (EXIT CODE: {exit_code})"),
+-                13 + graphemes::display_width(&exit_code) + 1,
++                trf(" (EXIT CODE: {exit_code})", &[("exit_code", exit_code.as_str())]),
++                graphemes::display_width(&trf(" (EXIT CODE: {exit_code})", &[("exit_code", exit_code_plain.as_str())])),
+             ),
+             StringAndLength::new(
+-                format!(" ({exit_code})"),
+-                2 + graphemes::display_width(&exit_code) + 1,
++                trf(" ({exit_code})", &[("exit_code", exit_code.as_str())]),
++                graphemes::display_width(&trf(" ({exit_code})", &[("exit_code", exit_code_plain.as_str())])),
+             ),
+         ]));
+         ui_spans.push(pane_name_span);
+@@ -805,7 +802,7 @@ pub fn render_screen_toggle(
+ ) {
+     let key_indication_text = "<TAB>";
+     let (new_session_text, running_sessions_text, exited_sessions_text) = if max_cols > 66 {
+-        ("New Session", "Attach to Session", "Resurrect Session")
++        ("New Session", tr("Attach to Session"), "Resurrect Session")
+     } else {
+         ("New", "Attach", "Resurrect")
+     };
+@@ -860,7 +857,7 @@ fn render_new_session_folder_prompt(
+ ) {
+     match new_session_info.new_session_folder.as_ref() {
+         Some(new_session_folder) => {
+-            let folder_prompt = "New session folder:";
++            let folder_prompt = tr("New session folder:");
+             let short_folder_prompt = "Folder:";
+             let new_session_path = new_session_folder.clone();
+             let new_session_folder = new_session_folder.display().to_string();
+@@ -944,7 +941,7 @@ fn render_new_session_folder_prompt(
+             }
+         },
+         None => {
+-            let folder_prompt = "New session folder:";
++            let folder_prompt = tr("New session folder:");
+             let short_folder_prompt = "Folder:";
+             let change_folder_shortcut_text = "<Ctrl f>";
+             let change_folder_shortcut = colors.shortcuts(change_folder_shortcut_text);
+@@ -998,8 +995,8 @@ pub fn render_new_session_block(
+ ) {
+     let enter = colors.shortcuts("<ENTER>");
+     if new_session_info.entering_new_session_name() {
+-        let prompt = "New session name:";
+-        let long_instruction = "when done, blank for random";
++        let prompt = tr("New session name:");
++        let long_instruction = tr("when done, blank for random");
+         let new_session_name = new_session_info.name();
+         if max_cols_of_new_session_block
+             > graphemes::display_width(&prompt)
+@@ -1043,7 +1040,7 @@ pub fn render_new_session_block(
+         } else {
+             new_session_info.name()
+         };
+-        let prompt = "New session name:";
++        let prompt = tr("New session name:");
+         let long_instruction = "to correct";
+         let esc = colors.shortcuts("<ESC>");
+         if max_cols_of_new_session_block
+@@ -1063,7 +1060,7 @@ pub fn render_new_session_block(
+             println!(
+                 "\u{1b}[m{}{}: {} {}",
+                 format!("\u{1b}[{};{}H", y + 1, x + 1),
+-                colors.session_name_prompt("New session name"),
++                colors.session_name_prompt(tr("New session name")),
+                 colors.session_and_folder_entry(new_session_name),
+                 esc,
+             );
+@@ -1095,22 +1092,30 @@ pub fn render_layout_selection_list(
+     let layout_search_term = new_session_info.layout_search_term();
+     let search_term_width = graphemes::display_width(&layout_search_term);
+     let search_term_len = layout_search_term.chars().count();
++    let layout_prefix = tr("New session layout: ");
++    let prefix_len = layout_prefix.chars().count();
++    let layout_suffix = tr("(Search and select from list, <ENTER> when done)");
++    let enter_off = layout_suffix
++        .find("<ENTER>")
++        .map(|p| layout_suffix[..p].chars().count())
++        .unwrap_or(0);
+     let layout_indication_line = if max_cols_of_new_session_block > 73 + search_term_width {
+         Text::from(format!(
+-            "New session layout: {}_ (Search and select from list, <ENTER> when done)",
+-            layout_search_term
++            "{}{}_ {}",
++            layout_prefix, layout_search_term, layout_suffix
+         ))
+-        .color_range(2, ..20 + search_term_len)
+-        .color_range(3, 20..20 + search_term_len)
+-        .color_range(3, 52 + search_term_len..59 + search_term_len)
++        .color_range(2, ..prefix_len + search_term_len)
++        .color_range(3, prefix_len..prefix_len + search_term_len)
++        .color_range(
++            3,
++            prefix_len + 2 + search_term_len + enter_off
++                ..prefix_len + 9 + search_term_len + enter_off,
++        )
+     } else {
+-        Text::from(format!(
+-            "New session layout: {}_ <ENTER>",
+-            layout_search_term
+-        ))
+-        .color_range(2, ..20 + search_term_len)
+-        .color_range(3, 20..20 + search_term_len)
+-        .color_range(3, 22 + search_term_len..)
++        Text::from(format!("{}{}_ <ENTER>", layout_prefix, layout_search_term))
++        .color_range(2, ..prefix_len + search_term_len)
++        .color_range(3, prefix_len..prefix_len + search_term_len)
++        .color_range(3, prefix_len + 2 + search_term_len..)
+     };
+     print_text_with_coordinates(layout_indication_line, x, y + 1, None, None);
+     println!();
+@@ -1183,7 +1188,7 @@ pub fn render_renaming_session_screen(
+     );
+     print_text_with_coordinates(text, x, y, None, None);
+     if new_session_name.contains('/') {
+-        let error_text = "Error: session name cannot contain '/'";
++        let error_text = tr("Error: session name cannot contain '/'");
+         print_text_with_coordinates(
+             Text::from(error_text).color_range(3, ..),
+             x,
+@@ -1220,11 +1225,11 @@ pub fn render_controls_line(
+             let rename = colors.shortcuts("<Ctrl r>");
+             let rename_text = colors.bold("Rename");
+             let disconnect = colors.shortcuts("<Alt x>");
+-            let disconnect_text = colors.bold("Disconnect others");
++            let disconnect_text = colors.bold(tr("Disconnect others"));
+             let kill = colors.shortcuts("<Del>");
+             let kill_text = colors.bold("Kill");
+             let kill_all = colors.shortcuts("<Ctrl d>");
+-            let kill_all_text = colors.bold("Kill all");
++            let kill_all_text = colors.bold(tr("Kill all"));
+ 
+             if max_cols > 90 {
+                 print!(
+@@ -1246,7 +1251,7 @@ pub fn render_controls_line(
+             let del = colors.shortcuts("<DEL>");
+             let del_text = colors.bold("Delete");
+             let del_all = colors.shortcuts("<Ctrl d>");
+-            let del_all_text = colors.bold("Delete all");
++            let del_all_text = colors.bold(tr("Delete all"));
+ 
+             if max_cols > 83 {
+                 print!(
+@@ -1268,7 +1273,7 @@ pub fn render_controls_line(
+             let kill = colors.shortcuts("<Del>");
+             let kill_text = colors.bold("Stop/Delete");
+             let layout = colors.shortcuts("<Ctrl l>");
+-            let layout_text = colors.bold("New with layout");
++            let layout_text = colors.bold(tr("New with layout"));
+             if max_cols > 92 {
+                 print!(
+                     "\u{1b}[m\u{1b}[{y};{x}HHelp: {arrows} - {navigate}, {layout} - {layout_text}, {rename} - {rename_text}, {kill} - {kill_text}"
+@@ -1287,12 +1292,12 @@ pub fn render_controls_line(
+             let rename = colors.shortcuts("<Ctrl r>");
+             let rename_text = colors.bold("Rename");
+             let disconnect = colors.shortcuts("<Alt x>");
+-            let disconnect_full_text = colors.bold("Disconnect others");
++            let disconnect_full_text = colors.bold(tr("Disconnect others"));
+             let disconnect_short_text = colors.bold("Disconnect");
+             let kill = colors.shortcuts("<Del>");
+             let kill_text = colors.bold("Kill/Delete");
+             let layout = colors.shortcuts("<Ctrl l>");
+-            let layout_full_text = colors.bold("New with layout");
++            let layout_full_text = colors.bold(tr("New with layout"));
+             let layout_short_text = colors.bold("Layout");
+             if max_cols > 121 {
+                 print!(
+@@ -1320,7 +1325,7 @@ pub fn render_controls_line(
+             let rename = colors.shortcuts("<Ctrl r>");
+             let rename_text = colors.bold("Rename");
+             let disconnect = colors.shortcuts("<Alt x>");
+-            let disconnect_full_text = colors.bold("Disconnect others");
++            let disconnect_full_text = colors.bold(tr("Disconnect others"));
+             let disconnect_short_text = colors.bold("Disconnect");
+             let kill = colors.shortcuts("<Del>");
+             let kill_text = colors.bold("Kill/Delete");
+@@ -1368,16 +1373,16 @@ fn format_elapsed_time(elapsed_millis: u64) -> String {
+         }
+     }
+     if formatted_duration.is_empty() {
+-        format!("just now")
++        tr("just now").to_string()
+     } else {
+-        format!("{} ago", formatted_duration)
++        trf("{t} ago", &[("t", formatted_duration.as_str())])
+     }
+ }
+ 
+ pub fn saved_text(last_saved_timestamp: Option<u64>) -> String {
+     match last_saved_timestamp {
+-        Some(timestamp) => format!("(saved {})", format_elapsed_time(timestamp)),
+-        None => "(not saved)".to_string(),
++        Some(timestamp) => trf("(saved {t})", &[("t", format_elapsed_time(timestamp).as_str())]),
++        None => tr("(not saved)").to_string(),
+     }
+ }
+ 
+@@ -1389,8 +1394,8 @@ pub fn render_unsaved_changes_line(
+ ) {
+     // Declare all text components
+     let shortcut_text = "<Ctrl a>";
+-    let full_action_text = "Save current session for resurrection";
+-    let medium_action_text = "Save session";
++    let full_action_text = tr("Save current session for resurrection");
++    let medium_action_text = tr("Save session");
+     let short_action_text = "Save";
+     let separator = " - ";
+     let space = " ";
+@@ -1533,3 +1538,4 @@ fn truncate_path(path: PathBuf, mut char_count_to_remove: usize) -> String {
+     }
+     truncated
+ }
++
+diff --git a/default-plugins/session-manager/src/ui/mod.rs b/default-plugins/session-manager/src/ui/mod.rs
+index 0ae53bf..46e7194 100644
+--- a/default-plugins/session-manager/src/ui/mod.rs
++++ b/default-plugins/session-manager/src/ui/mod.rs
+@@ -360,3 +360,4 @@ impl PaneUiInfo {
+         line_to_render
+     }
+ }
++

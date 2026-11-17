@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhcn <zhcn@local>
+Date: Mon, 16 Nov 2026 14:44:04 +0800
+Subject: [PATCH 01/19] i18n infra: zellij-i18n workspace member, i18n.js
+ hashed asset
+
+---
+ .gitignore                      | 2 ++
+ Cargo.lock                      | 4 ++++
+ Cargo.toml                      | 2 ++
+ xtask/src/assets.rs             | 1 +
+ zellij-client/assets/index.html | 1 +
+ 5 files changed, 10 insertions(+)
+
+diff --git a/.gitignore b/.gitignore
+index de56db3..af9355a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -4,3 +4,5 @@ target/
+ .vim
+ .idea
+ .DS_Store
++/zellij-i18n/
++/zellij-client/assets/i18n.js
+diff --git a/Cargo.lock b/Cargo.lock
+index 106b379..a57c77d 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -6542,6 +6542,10 @@ dependencies = [
+  "zellij-utils",
+ ]
+ 
++[[package]]
++name = "zellij-i18n"
++version = "0.1.0"
++
+ [[package]]
+ name = "zellij-integration-tests"
+ version = "0.46.0"
+diff --git a/Cargo.toml b/Cargo.toml
+index 8c47bad..8f430b9 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -62,6 +62,7 @@ members = [
+     "default-plugins/prompt",
+     "default-plugins/context-menu",
+     "zellij-client",
++    "zellij-i18n",
+     "zellij-integration-tests",
+     "zellij-server",
+     "zellij-utils",
+@@ -137,6 +138,7 @@ names = { version = "0.14.0", default-features = false }
+ include_dir = { version = "0.7.3", default-features = false }
+ sha2 = { version = "0.11", default-features = false }
+ zellij-server = { path = "zellij-server/", version = "0.46.0" }
++zellij-i18n = { path = "zellij-i18n/" }
+ zellij-utils = { path = "zellij-utils/", version = "0.46.0" }
+ 
+ [profile.dev]
+diff --git a/xtask/src/assets.rs b/xtask/src/assets.rs
+index 0fc63ce..ce1f4ef 100644
+--- a/xtask/src/assets.rs
++++ b/xtask/src/assets.rs
+@@ -28,6 +28,7 @@ const MODULE_ORDER: &[&str] = &[
+ 
+ const HASHED_ASSETS: &[&str] = &[
+     "app.js",
++    "i18n.js",
+     "xterm.js",
+     "addon-fit.js",
+     "addon-clipboard.js",
+diff --git a/zellij-client/assets/index.html b/zellij-client/assets/index.html
+index a781e0e..89bf300 100644
+--- a/zellij-client/assets/index.html
++++ b/zellij-client/assets/index.html
+@@ -18,6 +18,7 @@
+     </head>
+     <body>
+         <div id="terminal" tabindex="0"></div>
++        <script src="assets/i18n.js" integrity=""></script>
+         <script src="assets/modals.js" integrity="sha384-iDRet9veierC1HWbStHC4LLKCSzjeIZTrPRePuKxiUxr7UvdmJ5epb+PYqgHYqte"></script>
+         <script type="module" src="assets/app.js" integrity="sha384-DZE0VehfYlynA0H8ANBt7WO6QXca4YQjztKX0Xp5fO7/wwSUsaeh5BRpNnmXWNoC"></script>
+     </body>

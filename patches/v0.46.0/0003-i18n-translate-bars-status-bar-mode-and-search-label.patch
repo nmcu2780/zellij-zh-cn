@@ -1,0 +1,172 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhcn <zhcn@local>
+Date: Mon, 16 Nov 2026 14:46:20 +0800
+Subject: [PATCH 03/19] i18n: translate bars status-bar mode and search labels
+
+---
+ Cargo.lock                                    |  1 +
+ default-plugins/bars/Cargo.toml               |  1 +
+ .../bars/src/status_bar/first_line.rs         | 61 +++++++++++++------
+ .../bars/src/status_bar/one_line_ui.rs        | 21 ++++---
+ 4 files changed, 56 insertions(+), 28 deletions(-)
+
+diff --git a/Cargo.lock b/Cargo.lock
+index a57c77d..2cad019 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -469,6 +469,7 @@ dependencies = [
+  "serde_json",
+  "thiserror 2.0.19",
+  "unicode-width 0.2.2",
++ "zellij-i18n",
+  "zellij-tile",
+  "zellij-tile-utils",
+ ]
+diff --git a/default-plugins/bars/Cargo.toml b/default-plugins/bars/Cargo.toml
+index a0537ac..29eb465 100644
+--- a/default-plugins/bars/Cargo.toml
++++ b/default-plugins/bars/Cargo.toml
+@@ -12,6 +12,7 @@ serde = { workspace = true }
+ serde_json = { workspace = true }
+ thiserror = { workspace = true }
+ unicode-width = { workspace = true }
++zellij-i18n = { workspace = true }
+ zellij-tile = { path = "../../zellij-tile" }
+ zellij-tile-utils = { path = "../../zellij-tile-utils" }
+ 
+diff --git a/default-plugins/bars/src/status_bar/first_line.rs b/default-plugins/bars/src/status_bar/first_line.rs
+index 4727d6f..8171cb1 100644
+--- a/default-plugins/bars/src/status_bar/first_line.rs
++++ b/default-plugins/bars/src/status_bar/first_line.rs
+@@ -1,5 +1,6 @@
+ use crate::status_bar::unstyled_len;
+ use ansi_term::ANSIStrings;
++use zellij_i18n::{tr, tr_ctx};
+ use zellij_tile::graphemes::display_width;
+ use zellij_tile::prelude::actions::Action;
+ use zellij_tile::prelude::*;
+@@ -46,15 +47,15 @@ impl KeyShortcut {
+ 
+     pub fn full_text(&self) -> String {
+         match self.action {
+-            KeyAction::Lock => String::from("LOCK"),
+-            KeyAction::Unlock => String::from("UNLOCK"),
+-            KeyAction::Pane => String::from("PANE"),
+-            KeyAction::Tab => String::from("TAB"),
+-            KeyAction::Resize => String::from("RESIZE"),
+-            KeyAction::Search => String::from("SEARCH"),
+-            KeyAction::Quit => String::from("QUIT"),
+-            KeyAction::Session => String::from("SESSION"),
+-            KeyAction::Move => String::from("MOVE"),
++            KeyAction::Lock => String::from(tr("LOCK")),
++            KeyAction::Unlock => String::from(tr("UNLOCK")),
++            KeyAction::Pane => String::from(tr("PANE")),
++            KeyAction::Tab => String::from(tr("TAB")),
++            KeyAction::Resize => String::from(tr("RESIZE")),
++            KeyAction::Search => String::from(tr("SEARCH")),
++            KeyAction::Quit => String::from(tr("QUIT")),
++            KeyAction::Session => String::from(tr("SESSION")),
++            KeyAction::Move => String::from(tr("MOVE")),
+             KeyAction::Tmux => String::from("TMUX"),
+         }
+     }
+@@ -104,15 +105,15 @@ impl KeyShortcut {
+     }
+     pub fn short_text(&self) -> String {
+         match self.action {
+-            KeyAction::Lock => String::from("Lo"),
+-            KeyAction::Unlock => String::from("Un"),
+-            KeyAction::Pane => String::from("Pa"),
+-            KeyAction::Tab => String::from("Ta"),
+-            KeyAction::Resize => String::from("Re"),
+-            KeyAction::Search => String::from("Se"),
+-            KeyAction::Quit => String::from("Qu"),
+-            KeyAction::Session => String::from("Se"),
+-            KeyAction::Move => String::from("Mo"),
++            KeyAction::Lock => String::from(tr_ctx("LOCK (short)", "Lo")),
++            KeyAction::Unlock => String::from(tr_ctx("UNLOCK (short)", "Un")),
++            KeyAction::Pane => String::from(tr_ctx("PANE (short)", "Pa")),
++            KeyAction::Tab => String::from(tr_ctx("TAB (short)", "Ta")),
++            KeyAction::Resize => String::from(tr_ctx("RESIZE (short)", "Re")),
++            KeyAction::Search => String::from(tr_ctx("SEARCH (short)", "Se")),
++            KeyAction::Quit => String::from(tr_ctx("QUIT (short)", "Qu")),
++            KeyAction::Session => String::from(tr_ctx("SESSION (short)", "Se")),
++            KeyAction::Move => String::from(tr_ctx("MOVE (short)", "Mo")),
+             KeyAction::Tmux => String::from("Tm"),
+         }
+     }
+@@ -1103,4 +1104,28 @@ mod tests {
+ 
+         assert_eq!(ret, " Ctrl +  a  b  c ".to_string());
+     }
++
++    #[test]
++    fn mode_label_len_matches_rendered_display_width() {
++        // Mode labels may be localized (e.g. Chinese needs two cells per
++        // character); the recorded len must equal the rendered display width,
++        // not the byte length.
++        for action in [
++            KeyAction::Lock,
++            KeyAction::Pane,
++            KeyAction::Session,
++            KeyAction::Resize,
++        ] {
++            let key = KeyShortcut::new(
++                KeyMode::Unselected,
++                action,
++                Some(KeyWithModifier::new(BareKey::Char('0'))),
++            );
++            let color = colored_elements();
++            let ret = long_mode_shortcut(&key, color, "+", &vec![], false);
++            let len = ret.len;
++            let rendered = unstyle(ret);
++            assert_eq!(len, display_width(&rendered), "{:?}", action);
++        }
++    }
+ }
+diff --git a/default-plugins/bars/src/status_bar/one_line_ui.rs b/default-plugins/bars/src/status_bar/one_line_ui.rs
+index 7117785..a2470ab 100644
+--- a/default-plugins/bars/src/status_bar/one_line_ui.rs
++++ b/default-plugins/bars/src/status_bar/one_line_ui.rs
+@@ -19,6 +19,7 @@ use crate::status_bar::{
+     action_key, action_key_group, bars_hint, color_elements, MORE_MSG, TO_NORMAL,
+ };
+ use crate::status_bar::{ColoredElements, LinePart};
++use zellij_i18n::tr;
+ use zellij_tile::graphemes::display_width;
+ 
+ pub fn one_line_ui(
+@@ -1419,11 +1420,11 @@ fn add_keygroup_separator(help: &ModeInfo, max_len: usize) -> Option<LinePart> {
+             .italic();
+         let mut bits: Vec<ANSIString> = vec![];
+         let mode_help_text = match help.mode {
+-            InputMode::RenamePane => Some("RENAMING PANE"),
+-            InputMode::RenameTab => Some("RENAMING TAB"),
+-            InputMode::RenameSession => Some("RENAMING SESSION"),
+-            InputMode::EnterSearch => Some("ENTERING SEARCH TERM"),
+-            InputMode::Search => Some("SEARCHING"),
++            InputMode::RenamePane => Some(tr("RENAMING PANE")),
++            InputMode::RenameTab => Some(tr("RENAMING TAB")),
++            InputMode::RenameSession => Some(tr("RENAMING SESSION")),
++            InputMode::EnterSearch => Some(tr("ENTERING SEARCH TERM")),
++            InputMode::Search => Some(tr("SEARCHING")),
+             _ => None,
+         };
+         if let Some(mode_help_text) = mode_help_text {
+@@ -1449,11 +1450,11 @@ fn add_keygroup_separator(help: &ModeInfo, max_len: usize) -> Option<LinePart> {
+     let bg_color = palette_match!(palette.ribbon_selected.base);
+     let mut bits: Vec<ANSIString> = vec![];
+     let mode_help_text = match help.mode {
+-        InputMode::RenamePane => Some("RENAMING PANE"),
+-        InputMode::RenameTab => Some("RENAMING TAB"),
+-        InputMode::RenameSession => Some("RENAMING SESSION"),
+-        InputMode::EnterSearch => Some("ENTERING SEARCH TERM"),
+-        InputMode::Search => Some("SEARCHING"),
++        InputMode::RenamePane => Some(tr("RENAMING PANE")),
++        InputMode::RenameTab => Some(tr("RENAMING TAB")),
++        InputMode::RenameSession => Some(tr("RENAMING SESSION")),
++        InputMode::EnterSearch => Some(tr("ENTERING SEARCH TERM")),
++        InputMode::Search => Some(tr("SEARCHING")),
+         _ => None,
+     };
+     if let Some(mode_help_text) = mode_help_text {

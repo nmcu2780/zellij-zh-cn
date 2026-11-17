@@ -1,0 +1,1371 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 14:57:47 +0800
+Subject: [PATCH 17/19] i18n: translate pane frame UI, hints, prompts and
+ status messages in server
+
+---
+ Cargo.lock                                    |   2 +
+ zellij-server/Cargo.toml                      |   1 +
+ .../src/panes/nested_session_modal.rs         |   7 +-
+ zellij-server/src/panes/plugin_pane.rs        |  13 +-
+ zellij-server/src/panes/terminal_character.rs |  57 ++++---
+ zellij-server/src/panes/terminal_pane.rs      |   7 +-
+ zellij-server/src/pty.rs                      |   3 +-
+ zellij-server/src/screen.rs                   | 150 +++++++++---------
+ zellij-server/src/screen/hidden_bars.rs       |  15 +-
+ zellij-server/src/screen/popups.rs            |   5 +-
+ zellij-server/src/ui/hint_text.rs             |  67 ++++----
+ zellij-server/src/ui/loading_indication.rs    |   7 +-
+ zellij-server/src/ui/pane_boundaries_frame.rs |  43 ++---
+ zellij-utils/Cargo.toml                       |   1 +
+ zellij-utils/src/data.rs                      |  35 ++--
+ 15 files changed, 223 insertions(+), 190 deletions(-)
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 438c1b9..6ce2761 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -6631,6 +6631,7 @@ dependencies = [
+  "wasmi",
+  "wasmi_wasi",
+  "windows-sys 0.59.0",
++ "zellij-i18n",
+  "zellij-utils",
+ ]
+ 
+@@ -6761,6 +6762,7 @@ dependencies = [
+  "winapi",
+  "windows",
+  "windows-sys 0.59.0",
++ "zellij-i18n",
+ ]
+ 
+ [[package]]
+diff --git a/zellij-server/Cargo.toml b/zellij-server/Cargo.toml
+index c31e2e6..dae5ee6 100644
+--- a/zellij-server/Cargo.toml
++++ b/zellij-server/Cargo.toml
+@@ -9,6 +9,7 @@ license.workspace = true
+ # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+ 
+ [dependencies]
++zellij-i18n = { workspace = true }
+ ansi_term = { workspace = true }
+ anyhow = { workspace = true }
+ arrayvec = { version = "0.7.2", default-features = false, features = ["std"] }
+diff --git a/zellij-server/src/panes/nested_session_modal.rs b/zellij-server/src/panes/nested_session_modal.rs
+index b1e64e2..d1b541e 100644
+--- a/zellij-server/src/panes/nested_session_modal.rs
++++ b/zellij-server/src/panes/nested_session_modal.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr};
+ use zellij_utils::data::Style;
+ use zellij_utils::graphemes::{self, display_width};
+ 
+@@ -368,7 +369,7 @@ fn guest_modal_fallback_layout(
+     session_name: &str,
+ ) -> GuestModalLayout {
+     let fallback: Vec<GuestModalSegment> = vec![
+-        ("Nested Zellij session: ".to_string(), styles.title.clone()),
++        (tr("Nested Zellij session: ").to_string(), styles.title.clone()),
+         (session_name.to_string(), styles.session.clone()),
+         (" ".to_string(), styles.fill.clone()),
+         ("<Esc>".to_string(), styles.keycode.clone()),
+@@ -403,13 +404,13 @@ fn guest_modal_layout(
+ 
+     let title: Vec<GuestModalSegment> = vec![
+         (
+-            "Nested Zellij session detected: ".to_string(),
++            tr("Nested Zellij session detected: ").to_string(),
+             styles.title.clone(),
+         ),
+         (session_name.to_string(), styles.session.clone()),
+     ];
+     let prompt: Vec<GuestModalSegment> = vec![(
+-        "What would you like to do?".to_string(),
++        tr("What would you like to do?").to_string(),
+         styles.prompt.clone(),
+     )];
+     let options = [
+diff --git a/zellij-server/src/panes/plugin_pane.rs b/zellij-server/src/panes/plugin_pane.rs
+index 4ce9844..2174ec5 100644
+--- a/zellij-server/src/panes/plugin_pane.rs
++++ b/zellij-server/src/panes/plugin_pane.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr};
+ use std::collections::{BTreeSet, HashMap, HashSet};
+ use std::time::Instant;
+ 
+@@ -446,7 +447,7 @@ impl Pane for PluginPane {
+             && input_mode == InputMode::RenamePane
+             && frame_params.is_main_client
+         {
+-            String::from("Enter name...")
++            tr("Enter name...").to_owned()
+         } else if self.pane_name.is_empty() {
+             grid.title
+                 .clone()
+@@ -1062,9 +1063,9 @@ impl PluginPane {
+         if self.rows() >= min_row_count {
+             messages.push_str(&format!(
+                 "{} {} {}\n",
+-                bold_white.paint("Plugin"),
++                bold_white.paint(tr("Plugin")),
+                 cyan.paint(&plugin_permission.name),
+-                bold_white.paint("asks permission to:"),
++                bold_white.paint(tr("asks permission to:")),
+             ));
+             permissions.iter().enumerate().for_each(|(i, p)| {
+                 messages.push_str(&format!(
+@@ -1076,13 +1077,13 @@ impl PluginPane {
+ 
+             messages.push_str(&format!(
+                 "\n\n\r{} {}",
+-                bold_white.paint("Allow?"),
++                bold_white.paint(tr("Allow?")),
+                 green.paint("(y/n)"),
+             ));
+         } else {
+             messages.push_str(&format!(
+                 "{} {}. {} {}",
+-                bold_white.paint("This plugin asks permission to:"),
++                bold_white.paint(tr("This plugin asks permission to:")),
+                 orange.paint(
+                     permissions
+                         .iter()
+@@ -1090,7 +1091,7 @@ impl PluginPane {
+                         .collect::<Vec<_>>()
+                         .join(", ")
+                 ),
+-                bold_white.paint("Allow?"),
++                bold_white.paint(tr("Allow?")),
+                 green.paint("(y/n)"),
+             ));
+         }
+diff --git a/zellij-server/src/panes/terminal_character.rs b/zellij-server/src/panes/terminal_character.rs
+index 0a6f39c..1095e9e 100644
+--- a/zellij-server/src/panes/terminal_character.rs
++++ b/zellij-server/src/panes/terminal_character.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr};
+ use arrayvec::ArrayString;
+ use std::borrow::Cow;
+ use std::convert::From;
+@@ -1523,27 +1524,27 @@ pub fn render_first_run_banner(
+ 
+             let controls_bare_text_first_part = "<";
+             let enter_bare_text = "ENTER";
+-            let controls_bare_text_second_part = "> run, <";
++            let controls_bare_text_second_part = tr("> run, <");
+             let esc_bare_text = "ESC";
+-            let controls_bare_text_third_part = "> drop to shell, <";
++            let controls_bare_text_third_part = tr("> drop to shell, <");
+             let ctrl_c_bare_text = "Ctrl-c";
+-            let controls_bare_text_fourth_part = "> exit";
++            let controls_bare_text_fourth_part = tr("> exit");
+             let controls_color = RESET_STYLES
+                 .foreground(Some(AnsiCode::from(
+                     style.colors.text_unselected.emphasis_0,
+                 )))
+                 .bold(Some(AnsiCode::On));
+-            let controls_line_length = controls_bare_text_first_part.len()
+-                + enter_bare_text.len()
+-                + controls_bare_text_second_part.len()
+-                + esc_bare_text.len()
+-                + controls_bare_text_third_part.len()
+-                + ctrl_c_bare_text.len()
+-                + controls_bare_text_fourth_part.len();
++            let controls_line_length = zellij_utils::graphemes::display_width(controls_bare_text_first_part)
++                + zellij_utils::graphemes::display_width(enter_bare_text)
++                + zellij_utils::graphemes::display_width(controls_bare_text_second_part)
++                + zellij_utils::graphemes::display_width(esc_bare_text)
++                + zellij_utils::graphemes::display_width(controls_bare_text_third_part)
++                + zellij_utils::graphemes::display_width(ctrl_c_bare_text)
++                + zellij_utils::graphemes::display_width(controls_bare_text_fourth_part);
+             let controls_column_start_position =
+                 middle_column.saturating_sub(controls_line_length / 2);
+             let controls_line = format!(
+-                "\u{1b}[{};{}H{}<{}{}{}{}> run, <{}{}{}{}> drop to shell, <{}{}{}{}> exit",
++                "\u{1b}[{};{}H{}<{}{}{}{}>{}<{}{}{}{}>{}<{}{}{}{}>{}",
+                 middle_row + 2,
+                 controls_column_start_position,
+                 bold_text,
+@@ -1551,14 +1552,17 @@ pub fn render_first_run_banner(
+                 enter_bare_text,
+                 RESET_STYLES,
+                 bold_text,
++                tr(" run, "),
+                 controls_color,
+                 esc_bare_text,
+                 RESET_STYLES,
+                 bold_text,
++                tr(" drop to shell, "),
+                 controls_color,
+                 ctrl_c_bare_text,
+                 RESET_STYLES,
+-                bold_text
++                bold_text,
++                tr(" exit"),
+             );
+             format!(
+                 "\u{1b}[?25l{}{}{}{}",
+@@ -1566,7 +1570,7 @@ pub fn render_first_run_banner(
+             )
+         },
+         None => {
+-            let bare_text = format!("Waiting to start...");
++            let bare_text = tr("Waiting to start...").to_owned();
+             let bare_text_width = zellij_utils::graphemes::display_width(&bare_text);
+             let column_start_postion = middle_column.saturating_sub(bare_text_width / 2);
+             let bold_text = RESET_STYLES.bold(Some(AnsiCode::On));
+@@ -1577,27 +1581,27 @@ pub fn render_first_run_banner(
+ 
+             let controls_bare_text_first_part = "<";
+             let enter_bare_text = "ENTER";
+-            let controls_bare_text_second_part = "> run, <";
++            let controls_bare_text_second_part = tr("> run, <");
+             let esc_bare_text = "ESC";
+-            let controls_bare_text_third_part = "> drop to shell, <";
++            let controls_bare_text_third_part = tr("> drop to shell, <");
+             let ctrl_c_bare_text = "Ctrl-c";
+-            let controls_bare_text_fourth_part = "> exit";
++            let controls_bare_text_fourth_part = tr("> exit");
+             let controls_color = RESET_STYLES
+                 .foreground(Some(AnsiCode::from(
+                     style.colors.text_unselected.emphasis_0,
+                 )))
+                 .bold(Some(AnsiCode::On));
+-            let controls_line_length = controls_bare_text_first_part.len()
+-                + enter_bare_text.len()
+-                + controls_bare_text_second_part.len()
+-                + esc_bare_text.len()
+-                + controls_bare_text_third_part.len()
+-                + ctrl_c_bare_text.len()
+-                + controls_bare_text_fourth_part.len();
++            let controls_line_length = zellij_utils::graphemes::display_width(controls_bare_text_first_part)
++                + zellij_utils::graphemes::display_width(enter_bare_text)
++                + zellij_utils::graphemes::display_width(controls_bare_text_second_part)
++                + zellij_utils::graphemes::display_width(esc_bare_text)
++                + zellij_utils::graphemes::display_width(controls_bare_text_third_part)
++                + zellij_utils::graphemes::display_width(ctrl_c_bare_text)
++                + zellij_utils::graphemes::display_width(controls_bare_text_fourth_part);
+             let controls_column_start_position =
+                 middle_column.saturating_sub(controls_line_length / 2);
+             let controls_line = format!(
+-                "\u{1b}[{};{}H{}<{}{}{}{}> run, <{}{}{}{}> drop to shell, <{}{}{}{}> exit",
++                "\u{1b}[{};{}H{}<{}{}{}{}>{}<{}{}{}{}>{}<{}{}{}{}>{}",
+                 middle_row + 2,
+                 controls_column_start_position,
+                 bold_text,
+@@ -1605,14 +1609,17 @@ pub fn render_first_run_banner(
+                 enter_bare_text,
+                 RESET_STYLES,
+                 bold_text,
++                tr(" run, "),
+                 controls_color,
+                 esc_bare_text,
+                 RESET_STYLES,
+                 bold_text,
++                tr(" drop to shell, "),
+                 controls_color,
+                 ctrl_c_bare_text,
+                 RESET_STYLES,
+-                bold_text
++                bold_text,
++                tr(" exit"),
+             );
+             format!(
+                 "\u{1b}[?25l{}{}{}{}",
+diff --git a/zellij-server/src/panes/terminal_pane.rs b/zellij-server/src/panes/terminal_pane.rs
+index 7176a04..16681a9 100644
+--- a/zellij-server/src/panes/terminal_pane.rs
++++ b/zellij-server/src/panes/terminal_pane.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use crate::output::{CharacterChunk, KittyImageChunk, SixelImageChunk};
+ use crate::panes::kitty_graphics::{
+     InterceptorResult, KittyApcInterceptor, KittyHostSupport, KittyImageStore,
+@@ -591,12 +592,12 @@ impl Pane for TerminalPane {
+             && input_mode == InputMode::RenamePane
+             && frame_params.is_main_client
+         {
+-            String::from("Enter name...")
++            tr("Enter name...").to_owned()
+         } else if input_mode == InputMode::EnterSearch
+             && frame_params.is_main_client
+             && self.search_term.is_empty()
+         {
+-            String::from("Enter search...")
++            tr("Enter search...").to_owned()
+         } else if (input_mode == InputMode::EnterSearch || input_mode == InputMode::Search)
+             && !self.search_term.is_empty()
+         {
+@@ -616,7 +617,7 @@ impl Pane for TerminalPane {
+                 modifier_text.push_str(&modifiers.join(", "));
+                 modifier_text.push(']');
+             }
+-            format!("SEARCHING: {}{}", self.search_term, modifier_text)
++            trf("SEARCHING: {a0}{a1}", &[("a0", self.search_term.as_str()), ("a1", modifier_text.as_str())])
+         } else {
+             self.current_title()
+         };
+diff --git a/zellij-server/src/pty.rs b/zellij-server/src/pty.rs
+index 419f21d..42bf93a 100644
+--- a/zellij-server/src/pty.rs
++++ b/zellij-server/src/pty.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::trf;
+ use crate::background_jobs::write_session_state_to_disk;
+ use crate::background_jobs::BackgroundJob;
+ use crate::global_async_runtime::get_tokio_runtime as async_runtime;
+@@ -2659,7 +2660,7 @@ fn send_command_not_found_to_screen(
+     senders
+         .send_to_screen(ScreenInstruction::PtyBytes(
+             terminal_id,
+-            format!("Command not found: {}\n\rIf you were including arguments as part of the command, try including them as 'args' instead.", run_command.command.display())
++            trf("Command not found: {a0}\n\rIf you were including arguments as part of the command, try including them as 'args' instead.", &[("a0", run_command.command.display().to_string().as_str())])
+                 .as_bytes()
+                 .to_vec(),
+         ))
+diff --git a/zellij-server/src/screen.rs b/zellij-server/src/screen.rs
+index bbfbc6a..fe181d2 100644
+--- a/zellij-server/src/screen.rs
++++ b/zellij-server/src/screen.rs
+@@ -28,6 +28,7 @@
+ //! - `active_tab_ids: BTreeMap<ClientId, usize>`: Maps clients to active tab ID
+ //! - `tab_history: BTreeMap<ClientId, Vec<usize>>`: History of tab IDs per client
+ 
++use zellij_i18n::{tr, trf};
+ use std::cell::RefCell;
+ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+ use std::net::{IpAddr, Ipv4Addr};
+@@ -1964,14 +1965,17 @@ enum CloseOutcome {
+ 
+ fn close_prompt_quit_label(session_name: &str, other_clients: usize) -> String {
+     match other_clients {
+-        0 => format!("Quit (ends session '{}')", session_name),
+-        1 => format!(
+-            "Quit (ends session '{}' and disconnects 1 other client)",
+-            session_name
++        0 => trf(
++            "Quit (ends session '{a0}')",
++            &[("a0", session_name)],
+         ),
+-        count => format!(
+-            "Quit (ends session '{}' and disconnects {} other clients)",
+-            session_name, count
++        1 => trf(
++            "Quit (ends session '{a0}' and disconnects 1 other client)",
++            &[("a0", session_name)],
++        ),
++        count => trf(
++            "Quit (ends session '{a0}' and disconnects {a1} other clients)",
++            &[("a0", session_name), ("a1", count.to_string().as_str())],
+         ),
+     }
+ }
+@@ -1982,17 +1986,19 @@ fn close_prompt_request(
+ ) -> zellij_utils::prompt::PromptRequest {
+     use zellij_utils::prompt::{ChoiceItem, PromptPlacement, PromptRequest};
+     PromptRequest::menu([
+-        ChoiceItem::labeled(CLOSE_DETACH, "Detach (the session keeps running)").emphasize_first(6),
+-        ChoiceItem::labeled(
+-            CLOSE_QUIT,
+-            close_prompt_quit_label(session_name, other_clients),
+-        )
+-        .emphasize_first(4),
+-        ChoiceItem::labeled(CLOSE_CANCEL, "Cancel").emphasize_first(6),
++        ChoiceItem::labeled(CLOSE_DETACH, tr("Detach (the session keeps running)")).emphasize_first(tr("Detach (the session keeps running)").find(|c: char| c == ' ' || c == '（').unwrap_or_else(|| tr("Detach (the session keeps running)").chars().count())),
++        {
++            let quit_label = close_prompt_quit_label(session_name, other_clients);
++            let quit_len = quit_label
++                .find(|c: char| c == ' ' || c == '（')
++                .unwrap_or_else(|| quit_label.chars().count());
++            ChoiceItem::labeled(CLOSE_QUIT, quit_label).emphasize_first(quit_len)
++        },
++        ChoiceItem::labeled(CLOSE_CANCEL, tr("Cancel")).emphasize_first(tr("Cancel").find(|c: char| c == ' ' || c == '（').unwrap_or_else(|| tr("Cancel").chars().count())),
+     ])
+-    .remember(CLOSE_REMEMBER_LABEL)
++    .remember(tr(CLOSE_REMEMBER_LABEL))
+     .padded()
+-    .title("Close this window?")
++    .title(tr("Close this window?"))
+     .placement(PromptPlacement::Center)
+     .capture_all_keys(true)
+ }
+@@ -6488,7 +6494,7 @@ impl Screen {
+                 let mut completion = completion;
+                 if let Some(c) = completion.as_mut() {
+                     c.set_exit_status(1);
+-                    c.set_error_message("Tab not found".to_string());
++                    c.set_error_message(tr("Tab not found").to_string());
+                 }
+                 drop(completion);
+             },
+@@ -6512,7 +6518,7 @@ impl Screen {
+                 let mut completion = completion;
+                 if let Some(c) = completion.as_mut() {
+                     c.set_exit_status(1);
+-                    c.set_error_message("Tab not found".to_string());
++                    c.set_error_message(tr("Tab not found").to_string());
+                 }
+                 drop(completion);
+             },
+@@ -6535,7 +6541,7 @@ impl Screen {
+         match tab {
+             None => {
+                 if let Some(c) = completion.as_mut() {
+-                    c.set_error_message("Tab not found".to_string());
++                    c.set_error_message(tr("Tab not found").to_string());
+                 }
+             },
+             Some(tab) => {
+@@ -9741,7 +9747,7 @@ impl Screen {
+             if let Some(c) = completion_tx.as_mut() {
+                 c.set_exit_status(1);
+                 c.set_error_message(
+-                    "Manual theme switching requires both `theme_dark` and `theme_light` to be configured."
++                    tr("Manual theme switching requires both `theme_dark` and `theme_light` to be configured.")
+                         .to_string(),
+                 );
+             }
+@@ -11619,7 +11625,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("No connected clients to change focus for");
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message("No connected clients to change focus for".to_string());
++                        c.set_error_message(tr("No connected clients to change focus for").to_string());
+                     }
+                 } else {
+                     let old_pane_id = screen.get_active_pane_id(&client_id);
+@@ -11641,7 +11647,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("No connected clients to change focus for");
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message("No connected clients to change focus for".to_string());
++                        c.set_error_message(tr("No connected clients to change focus for").to_string());
+                     }
+                 } else {
+                     let old_pane_id = screen.get_active_pane_id(&client_id);
+@@ -11679,7 +11685,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("No connected clients to move focus for");
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message("No connected clients to move focus for".to_string());
++                        c.set_error_message(tr("No connected clients to move focus for").to_string());
+                     }
+                 } else {
+                     let old_pane_id = screen.get_active_pane_id(&client_id);
+@@ -11714,7 +11720,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("No connected clients to move focus for");
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message("No connected clients to move focus for".to_string());
++                        c.set_error_message(tr("No connected clients to move focus for").to_string());
+                     }
+                 } else {
+                     let old_pane_id = screen.get_active_pane_id(&client_id);
+@@ -11742,7 +11748,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("No connected clients to move focus for");
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message("No connected clients to move focus for".to_string());
++                        c.set_error_message(tr("No connected clients to move focus for").to_string());
+                     }
+                 } else {
+                     let old_pane_id = screen.get_active_pane_id(&client_id);
+@@ -11777,7 +11783,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("No connected clients to move focus for");
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message("No connected clients to move focus for".to_string());
++                        c.set_error_message(tr("No connected clients to move focus for").to_string());
+                     }
+                 } else {
+                     let old_pane_id = screen.get_active_pane_id(&client_id);
+@@ -11812,7 +11818,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("No connected clients to move focus for");
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message("No connected clients to move focus for".to_string());
++                        c.set_error_message(tr("No connected clients to move focus for").to_string());
+                     }
+                 } else {
+                     let old_pane_id = screen.get_active_pane_id(&client_id);
+@@ -11840,7 +11846,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("No connected clients to move focus for");
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message("No connected clients to move focus for".to_string());
++                        c.set_error_message(tr("No connected clients to move focus for").to_string());
+                     }
+                 } else {
+                     let old_pane_id = screen.get_active_pane_id(&client_id);
+@@ -12751,7 +12757,7 @@ pub(crate) fn screen_thread_main(
+                     screen.log_and_report_session_state()?;
+                 } else if let Some(ref mut c) = _completion_tx {
+                     c.set_exit_status(1);
+-                    c.set_error_message(format!("Pane {:?} is not in a stack", pane_id));
++                    c.set_error_message(trf("Pane {a0} is not in a stack", &[("a0", format!("{:?}", pane_id).as_str())]));
+                 }
+             },
+             ScreenInstruction::SetPaneFrameStyle(pane_frame_style, _completion_tx) => {
+@@ -13554,8 +13560,9 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Tiled swap layout not found or incompatible: {layout_name}");
+                     if let Some(ref mut c) = completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!(
+-                            "Tiled swap layout not found or incompatible: {layout_name}"
++                        c.set_error_message(trf(
++                            "Tiled swap layout not found or incompatible: {a0}",
++                            &[("a0", layout_name.as_str())],
+                         ));
+                     }
+                 }
+@@ -13582,8 +13589,9 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Floating swap layout not found or incompatible: {layout_name}");
+                     if let Some(ref mut c) = completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!(
+-                            "Floating swap layout not found or incompatible: {layout_name}"
++                        c.set_error_message(trf(
++                            "Floating swap layout not found or incompatible: {a0}",
++                            &[("a0", layout_name.as_str())],
+                         ));
+                     }
+                 }
+@@ -14418,7 +14426,7 @@ pub(crate) fn screen_thread_main(
+                 if !pane_exists {
+                     if let Some(c) = completion_tx.as_mut() {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 } else {
+                     let already_focused = screen
+@@ -14428,7 +14436,7 @@ pub(crate) fn screen_thread_main(
+                     if already_focused {
+                         if let Some(c) = completion_tx.as_mut() {
+                             c.set_exit_status(1);
+-                            c.set_error_message(format!("Pane {:?} is already focused", pane_id));
++                            c.set_error_message(trf("Pane {a0} is already focused", &[("a0", format!("{:?}", pane_id).as_str())]));
+                         }
+                     } else {
+                         screen.focus_pane_with_id(
+@@ -15257,9 +15265,9 @@ pub(crate) fn screen_thread_main(
+                 if !failed_pane_ids.is_empty() {
+                     if let Some(completion_tx) = completion_tx.as_mut() {
+                         completion_tx.set_exit_status(1);
+-                        completion_tx.set_error_message(format!(
+-                            "Failed to change the coordinates of panes: {:?}",
+-                            failed_pane_ids
++                        completion_tx.set_error_message(trf(
++                            "Failed to change the coordinates of panes: {a0}",
++                            &[("a0", format!("{:?}", failed_pane_ids).as_str())],
+                         ));
+                     }
+                 }
+@@ -15280,7 +15288,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(c) = completion_tx.as_mut() {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 let _ = screen.render(None);
+@@ -15550,7 +15558,7 @@ pub(crate) fn screen_thread_main(
+             ScreenInstruction::GoToNextAttention(client_id, mut completion) => {
+                 if !screen.go_to_next_attention(client_id) {
+                     completion.as_mut().map(|c| {
+-                        c.set_error_message("Nothing needs attention".to_owned());
++                        c.set_error_message(tr("Nothing needs attention").to_owned());
+                         c.set_exit_status(2)
+                     });
+                 }
+@@ -15563,7 +15571,7 @@ pub(crate) fn screen_thread_main(
+             } => {
+                 if !screen.mark_pane_seen(session, pane_id, client_id) {
+                     completion.as_mut().map(|c| {
+-                        c.set_error_message("Pane not found".to_owned());
++                        c.set_error_message(tr("Pane not found").to_owned());
+                         c.set_exit_status(2)
+                     });
+                 }
+@@ -15583,7 +15591,7 @@ pub(crate) fn screen_thread_main(
+             } => {
+                 if !screen.session_pane_command(session_name, command, client_id) {
+                     completion.as_mut().map(|c| {
+-                        c.set_error_message("Pane not found".to_owned());
++                        c.set_error_message(tr("Pane not found").to_owned());
+                         c.set_exit_status(2)
+                     });
+                 }
+@@ -15950,7 +15958,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.sync_scroll_mode_for_pane_id(pane_id)?;
+@@ -15970,7 +15978,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.sync_scroll_mode_for_pane_id(pane_id)?;
+@@ -15990,7 +15998,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.sync_scroll_mode_for_pane_id(pane_id)?;
+@@ -16010,7 +16018,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.sync_scroll_mode_for_pane_id(pane_id)?;
+@@ -16030,7 +16038,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.sync_scroll_mode_for_pane_id(pane_id)?;
+@@ -16050,7 +16058,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.sync_scroll_mode_for_pane_id(pane_id)?;
+@@ -16070,7 +16078,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.sync_scroll_mode_for_pane_id(pane_id)?;
+@@ -16090,7 +16098,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.sync_scroll_mode_for_pane_id(pane_id)?;
+@@ -16110,7 +16118,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16130,7 +16138,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16150,7 +16158,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16170,7 +16178,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16210,7 +16218,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16230,7 +16238,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16254,7 +16262,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.log_and_report_session_state()?;
+@@ -16291,7 +16299,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16311,7 +16319,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16330,7 +16338,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Pane with id {:?} not found", pane_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Pane with id {:?} not found", pane_id));
++                        c.set_error_message(trf("Pane with id {a0} not found", &[("a0", format!("{:?}", pane_id).as_str())]));
+                     }
+                 }
+             },
+@@ -16345,7 +16353,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Tab with id {} not found", tab_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Tab with id {} not found", tab_id));
++                        c.set_error_message(trf("Tab with id {a0} not found", &[("a0", tab_id.to_string().as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16357,7 +16365,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Tab with id {} not found", tab_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Tab with id {} not found", tab_id));
++                        c.set_error_message(trf("Tab with id {a0} not found", &[("a0", tab_id.to_string().as_str())]));
+                     }
+                 }
+                 screen.log_and_report_session_state()?;
+@@ -16377,7 +16385,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Tab with id {} not found", tab_id);
+                     if let Some(ref mut c) = completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Tab with id {} not found", tab_id));
++                        c.set_error_message(trf("Tab with id {a0} not found", &[("a0", tab_id.to_string().as_str())]));
+                     }
+                     drop(completion_tx);
+                 }
+@@ -16391,7 +16399,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Tab with id {} not found", tab_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Tab with id {} not found", tab_id));
++                        c.set_error_message(trf("Tab with id {a0} not found", &[("a0", tab_id.to_string().as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16404,7 +16412,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Tab with id {} not found", tab_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Tab with id {} not found", tab_id));
++                        c.set_error_message(trf("Tab with id {a0} not found", &[("a0", tab_id.to_string().as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16430,7 +16438,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Tab with id {} not found", tab_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Tab with id {} not found", tab_id));
++                        c.set_error_message(trf("Tab with id {a0} not found", &[("a0", tab_id.to_string().as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16458,7 +16466,7 @@ pub(crate) fn screen_thread_main(
+                     log::error!("Tab with id {} not found", tab_id);
+                     if let Some(ref mut c) = _completion_tx {
+                         c.set_exit_status(1);
+-                        c.set_error_message(format!("Tab with id {} not found", tab_id));
++                        c.set_error_message(trf("Tab with id {a0} not found", &[("a0", tab_id.to_string().as_str())]));
+                     }
+                 }
+                 screen.render(None)?;
+@@ -16537,7 +16545,7 @@ pub(crate) fn screen_thread_main(
+             ScreenInstruction::MutePane(pane_id, client_id, mut completion_tx) => {
+                 if !screen.toggle_pane_mute(pane_id, client_id) {
+                     completion_tx.as_mut().map(|c| {
+-                        c.set_error_message("Pane not found".to_owned());
++                        c.set_error_message(tr("Pane not found").to_owned());
+                         c.set_exit_status(2)
+                     });
+                 }
+@@ -16546,7 +16554,7 @@ pub(crate) fn screen_thread_main(
+             ScreenInstruction::IgnorePaneOutput(pane_id, client_id, mut completion_tx) => {
+                 if !screen.toggle_pane_ignore_output(pane_id, client_id) {
+                     completion_tx.as_mut().map(|c| {
+-                        c.set_error_message("Pane not found".to_owned());
++                        c.set_error_message(tr("Pane not found").to_owned());
+                         c.set_exit_status(2)
+                     });
+                 }
+@@ -16555,7 +16563,7 @@ pub(crate) fn screen_thread_main(
+             ScreenInstruction::WatchPane(pane_id, client_id, mut completion_tx) => {
+                 if !screen.toggle_pane_watch(pane_id, client_id) {
+                     completion_tx.as_mut().map(|c| {
+-                        c.set_error_message("Pane not found".to_owned());
++                        c.set_error_message(tr("Pane not found").to_owned());
+                         c.set_exit_status(2)
+                     });
+                 }
+@@ -16563,7 +16571,7 @@ pub(crate) fn screen_thread_main(
+             ScreenInstruction::MuteTab(tab_id, client_id, mut completion_tx) => {
+                 if !screen.toggle_tab_mute(tab_id, client_id) {
+                     completion_tx.as_mut().map(|c| {
+-                        c.set_error_message("Tab not found".to_owned());
++                        c.set_error_message(tr("Tab not found").to_owned());
+                         c.set_exit_status(2)
+                     });
+                 }
+diff --git a/zellij-server/src/screen/hidden_bars.rs b/zellij-server/src/screen/hidden_bars.rs
+index 46d83b8..24d346e 100644
+--- a/zellij-server/src/screen/hidden_bars.rs
++++ b/zellij-server/src/screen/hidden_bars.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use super::Screen;
+ use crate::panes::PaneId;
+ use crate::plugins::{PluginInstruction, PromptCaller, SERVER_NOTICE_CALLER_ID};
+@@ -40,7 +41,7 @@ fn hidden_bars_description(hidden_bars: &HiddenBars) -> String {
+         HiddenBars::Named(names) if names.len() == 1 => names
+             .iter()
+             .next()
+-            .and_then(|name| bar_role_label(name))
++            .and_then(|name| bar_role_label(name)).map(tr)
+             .map(|label| {
+                 let mut chars = label.chars();
+                 match chars.next() {
+@@ -48,8 +49,8 @@ fn hidden_bars_description(hidden_bars: &HiddenBars) -> String {
+                     None => String::new(),
+                 }
+             })
+-            .unwrap_or_else(|| "Bars".to_owned()),
+-        _ => "Bars".to_owned(),
++            .unwrap_or_else(|| tr("Bars").to_owned()),
++        _ => tr("Bars").to_owned(),
+     }
+ }
+ 
+@@ -233,12 +234,12 @@ impl Screen {
+         .unwrap_or_else(|| "zellij action show-bars".to_owned());
+         let description = hidden_bars_description(hidden_bars);
+         if self.context_menu_enabled {
+-            format!(
+-                "{} hidden. {} or right-click → Show bars",
+-                description, shortcut
++            trf(
++                "{a0} hidden. {a1} or right-click → Show bars",
++                &[("a0", description.as_str()), ("a1", shortcut.as_str())]
+             )
+         } else {
+-            format!("{} hidden. {} to show", description, shortcut)
++            trf("{a0} hidden. {a1} to show", &[("a0", description.as_str()), ("a1", shortcut.as_str())])
+         }
+     }
+     fn send_hidden_bars_notice(&self, client_id: ClientId, hidden_bars: &HiddenBars) {
+diff --git a/zellij-server/src/screen/popups.rs b/zellij-server/src/screen/popups.rs
+index 6c0bc03..ad02c87 100644
+--- a/zellij-server/src/screen/popups.rs
++++ b/zellij-server/src/screen/popups.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use super::Screen;
+ use crate::background_jobs::BackgroundJob;
+ use crate::panes::PaneId;
+@@ -1334,7 +1335,7 @@ impl Screen {
+             .0
+             .unwrap_or_else(|| "custom".to_owned());
+         let request =
+-            zellij_utils::prompt::PromptRequest::notify(format!("Layout: {}", layout_name))
++            zellij_utils::prompt::PromptRequest::notify(trf("Layout: {a0}", &[("a0", layout_name.as_str())]))
+                 .timeout(std::time::Duration::from_millis(
+                     SWAP_LAYOUT_NOTIFICATION_MS,
+                 ));
+@@ -1354,7 +1355,7 @@ impl Screen {
+     }
+     pub fn show_session_rename_error(&mut self, client_id: ClientId, error_text: String) {
+         let request =
+-            zellij_utils::prompt::PromptRequest::info("Could not rename session", error_text);
++            zellij_utils::prompt::PromptRequest::info(tr("Could not rename session"), error_text);
+         let _ = self
+             .bus
+             .senders
+diff --git a/zellij-server/src/ui/hint_text.rs b/zellij-server/src/ui/hint_text.rs
+index c4d0e59..8abfdde 100644
+--- a/zellij-server/src/ui/hint_text.rs
++++ b/zellij-server/src/ui/hint_text.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr};
+ use std::collections::BTreeMap;
+ use zellij_utils::data::StyledText;
+ use zellij_utils::graphemes::display_width;
+@@ -103,11 +104,11 @@ pub fn rerun_segments(is_first_run: bool, tier: HintTier) -> Vec<HintSegment> {
+             HintSegment::plain("<"),
+             HintSegment::emphasis("ESC"),
+             HintSegment::plain(">"),
+-            HintSegment::plain(" drop to shell, "),
++            HintSegment::plain(tr(" drop to shell, ")),
+             HintSegment::plain("<"),
+             HintSegment::emphasis("Ctrl-c"),
+             HintSegment::plain(">"),
+-            HintSegment::plain(" exit "),
++            HintSegment::plain(tr(" exit ")),
+         ],
+         HintTier::Medium => vec![
+             HintSegment::plain("<"),
+@@ -117,11 +118,11 @@ pub fn rerun_segments(is_first_run: bool, tier: HintTier) -> Vec<HintSegment> {
+             HintSegment::plain("<"),
+             HintSegment::emphasis("ESC"),
+             HintSegment::plain(">"),
+-            HintSegment::plain(" shell "),
++            HintSegment::plain(tr(" shell ")),
+             HintSegment::plain("<"),
+             HintSegment::emphasis("Ctrl-c"),
+             HintSegment::plain(">"),
+-            HintSegment::plain(" exit"),
++            HintSegment::plain(tr(" exit")),
+         ],
+         HintTier::Minimal => vec![
+             HintSegment::plain("<"),
+@@ -143,14 +144,14 @@ pub fn exit_code_segments(exit_status: HintExitStatus) -> Vec<HintSegment> {
+             };
+             vec![
+                 HintSegment::plain(" [ "),
+-                HintSegment::plain("EXIT CODE: "),
++                HintSegment::plain(tr("EXIT CODE: ")),
+                 exit_code_segment,
+                 HintSegment::plain(" ] "),
+             ]
+         },
+         HintExitStatus::Exited => vec![
+             HintSegment::plain(" [ "),
+-            HintSegment::error("EXITED"),
++            HintSegment::error(tr("EXITED")),
+             HintSegment::plain(" ] "),
+         ],
+     }
+@@ -164,29 +165,29 @@ pub fn hover_segments(tier: HintTier) -> Vec<HintSegment> {
+             HintSegment::plain(" <"),
+             HintSegment::emphasis("Click"),
+             HintSegment::plain(">"),
+-            HintSegment::plain(" - group,"),
++            HintSegment::plain(tr(" - group,")),
+             HintSegment::plain(" "),
+             HintSegment::emphasis("Alt"),
+             HintSegment::plain(" <"),
+             HintSegment::emphasis("Right-Click"),
+             HintSegment::plain(">"),
+-            HintSegment::plain(" - ungroup all "),
++            HintSegment::plain(tr(" - ungroup all ")),
+         ],
+         HintTier::Medium => vec![
+             HintSegment::emphasis("Alt"),
+             HintSegment::plain(" <"),
+             HintSegment::emphasis("Click"),
+-            HintSegment::plain("> group, "),
++            HintSegment::plain(tr("> group, ")),
+             HintSegment::emphasis("Alt"),
+             HintSegment::plain(" <"),
+             HintSegment::emphasis("Right-Click"),
+-            HintSegment::plain("> ungroup"),
++            HintSegment::plain(tr("> ungroup")),
+         ],
+         HintTier::Minimal => vec![
+             HintSegment::emphasis("Alt"),
+             HintSegment::plain(" <"),
+             HintSegment::emphasis("Click"),
+-            HintSegment::plain("> group"),
++            HintSegment::plain(tr("> group")),
+         ],
+     }
+ }
+@@ -202,36 +203,36 @@ pub fn resize_segments(
+                 HintSegment::plain(" "),
+                 HintSegment::emphasis_2("Ctrl"),
+                 HintSegment::plain(" <"),
+-                HintSegment::emphasis_2("drag borders"),
+-                HintSegment::plain("> to resize "),
++                HintSegment::emphasis_2(tr("drag borders")),
++                HintSegment::plain(tr("> to resize ")),
+             ],
+             (false, HintTier::Full) => vec![
+                 HintSegment::plain(" <"),
+-                HintSegment::emphasis_2("drag borders"),
+-                HintSegment::plain("> to resize "),
++                HintSegment::emphasis_2(tr("drag borders")),
++                HintSegment::plain(tr("> to resize ")),
+             ],
+             (true, HintTier::Medium) => vec![
+                 HintSegment::plain(" <"),
+                 HintSegment::emphasis_2("Ctrl"),
+                 HintSegment::plain(" "),
+-                HintSegment::emphasis_2("drag borders"),
+-                HintSegment::plain("> resize "),
++                HintSegment::emphasis_2(tr("drag borders")),
++                HintSegment::plain(tr("> resize ")),
+             ],
+             (false, HintTier::Medium) => vec![
+                 HintSegment::plain(" <"),
+-                HintSegment::emphasis_2("drag borders"),
+-                HintSegment::plain("> resize "),
++                HintSegment::emphasis_2(tr("drag borders")),
++                HintSegment::plain(tr("> resize ")),
+             ],
+             (true, HintTier::Minimal) => vec![
+                 HintSegment::plain(" <"),
+                 HintSegment::emphasis_2("Ctrl"),
+                 HintSegment::plain(" "),
+-                HintSegment::emphasis_2("drag borders"),
++                HintSegment::emphasis_2(tr("drag borders")),
+                 HintSegment::plain("> "),
+             ],
+             (false, HintTier::Minimal) => vec![
+                 HintSegment::plain(" <"),
+-                HintSegment::emphasis_2("drag borders"),
++                HintSegment::emphasis_2(tr("drag borders")),
+                 HintSegment::plain("> "),
+             ],
+         };
+@@ -245,11 +246,11 @@ pub fn resize_segments(
+                     HintSegment::emphasis_2("Ctrl"),
+                     HintSegment::plain(" <"),
+                     HintSegment::emphasis_2("MouseScroll"),
+-                    HintSegment::plain("> or "),
++                    HintSegment::plain(tr("> or ")),
+                     HintSegment::emphasis_2("Ctrl"),
+                     HintSegment::plain(" <"),
+-                    HintSegment::emphasis_2("drag borders"),
+-                    HintSegment::plain("> to resize "),
++                    HintSegment::emphasis_2(tr("drag borders")),
++                    HintSegment::plain(tr("> to resize ")),
+                 ]
+             } else {
+                 vec![
+@@ -257,9 +258,9 @@ pub fn resize_segments(
+                     HintSegment::emphasis_2("Ctrl"),
+                     HintSegment::plain(" <"),
+                     HintSegment::emphasis_2("MouseScroll"),
+-                    HintSegment::plain("> or <"),
+-                    HintSegment::emphasis_2("drag borders"),
+-                    HintSegment::plain("> to resize "),
++                    HintSegment::plain(tr("> or <")),
++                    HintSegment::emphasis_2(tr("drag borders")),
++                    HintSegment::plain(tr("> to resize ")),
+                 ]
+             }
+         },
+@@ -271,8 +272,8 @@ pub fn resize_segments(
+                     HintSegment::plain(" "),
+                     HintSegment::emphasis_2("MouseScroll"),
+                     HintSegment::plain("/"),
+-                    HintSegment::emphasis_2("drag borders"),
+-                    HintSegment::plain("> resize "),
++                    HintSegment::emphasis_2(tr("drag borders")),
++                    HintSegment::plain(tr("> resize ")),
+                 ]
+             } else {
+                 vec![
+@@ -281,8 +282,8 @@ pub fn resize_segments(
+                     HintSegment::plain(" "),
+                     HintSegment::emphasis_2("MouseScroll"),
+                     HintSegment::plain(">/<"),
+-                    HintSegment::emphasis_2("drag borders"),
+-                    HintSegment::plain("> resize "),
++                    HintSegment::emphasis_2(tr("drag borders")),
++                    HintSegment::plain(tr("> resize ")),
+                 ]
+             }
+         },
+@@ -294,7 +295,7 @@ pub fn resize_segments(
+                     HintSegment::plain(" "),
+                     HintSegment::emphasis_2("MouseScroll"),
+                     HintSegment::plain("/"),
+-                    HintSegment::emphasis_2("drag borders"),
++                    HintSegment::emphasis_2(tr("drag borders")),
+                     HintSegment::plain("> "),
+                 ]
+             } else {
+@@ -304,7 +305,7 @@ pub fn resize_segments(
+                     HintSegment::plain(" "),
+                     HintSegment::emphasis_2("MouseScroll"),
+                     HintSegment::plain(">/<"),
+-                    HintSegment::emphasis_2("drag borders"),
++                    HintSegment::emphasis_2(tr("drag borders")),
+                     HintSegment::plain("> "),
+                 ]
+             }
+diff --git a/zellij-server/src/ui/loading_indication.rs b/zellij-server/src/ui/loading_indication.rs
+index f5b7afe..2c12780 100644
+--- a/zellij-server/src/ui/loading_indication.rs
++++ b/zellij-server/src/ui/loading_indication.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr};
+ use std::fmt::{Display, Error, Formatter};
+ use std::time::Instant;
+ 
+@@ -103,7 +104,7 @@ impl Display for LoadingIndication {
+         if let Some(error_text) = &self.error {
+             stringified.push_str(&format!(
+                 "\n\r{} {}",
+-                red.bold().paint("ERROR: "),
++                red.bold().paint(tr("ERROR: ")),
+                 error_text.replace('\n', "\n\r")
+             ));
+             // we add this additional line explicitly to make it easier to realize when something
+@@ -111,10 +112,10 @@ impl Display for LoadingIndication {
+             stringified.push_str(&format!(
+                 "\n\r{}",
+                 red.bold()
+-                    .paint("ERROR IN PLUGIN - check logs for more info")
++                    .paint(tr("ERROR IN PLUGIN - check logs for more info"))
+             ));
+         } else {
+-            let loading_text = "Loading";
++            let loading_text = tr("Loading");
+             stringified.push_str(&format!("{} {}", loading_text, cyan.paint(plugin_name)));
+             add_dots(&mut stringified);
+         }
+diff --git a/zellij-server/src/ui/pane_boundaries_frame.rs b/zellij-server/src/ui/pane_boundaries_frame.rs
+index 5027c86..4159ffe 100644
+--- a/zellij-server/src/ui/pane_boundaries_frame.rs
++++ b/zellij-server/src/ui/pane_boundaries_frame.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use crate::output::CharacterChunk;
+ use crate::panes::{
+     AnsiCode, CharacterStyles, RcCharacterStyles, TerminalCharacter, EMPTY_TERMINAL_CHARACTER,
+@@ -17,6 +18,7 @@ use zellij_utils::position::Position;
+ 
+ use unicode_width::UnicodeWidthStr;
+ use zellij_utils::graphemes;
++use zellij_utils::graphemes::display_width;
+ 
+ fn styled_characters(
+     characters: &str,
+@@ -357,12 +359,12 @@ impl PaneFrame {
+         &self,
+         max_length: usize,
+     ) -> Option<(Vec<TerminalCharacter>, usize)> {
+-        let prefix = " SCROLL: ";
++        let prefix = tr(" SCROLL: ");
+         let full_indication = format!(" {}/{} ", self.scroll_position.0, self.scroll_position.1);
+         let short_indication = format!(" {} ", self.scroll_position.0);
+-        let full_indication_len = full_indication.chars().count();
+-        let short_indication_len = short_indication.chars().count();
+-        let prefix_len = prefix.chars().count();
++        let full_indication_len = display_width(&full_indication);
++        let short_indication_len = display_width(&short_indication);
++        let prefix_len = display_width(prefix);
+         if prefix_len + full_indication_len <= max_length {
+             Some((
+                 foreground_color(&format!("{}{}", prefix, full_indication), self.color),
+@@ -387,8 +389,8 @@ impl PaneFrame {
+         max_length: usize,
+     ) -> Option<(Vec<TerminalCharacter>, usize)> {
+         let is_checked = if self.is_pinned { '+' } else { ' ' };
+-        let full_indication = format!(" PIN [{}] ", is_checked);
+-        let full_indication_len = full_indication.chars().count();
++        let full_indication = trf(" PIN [{a0}] ", &[("a0", is_checked.to_string().as_str())]);
++        let full_indication_len = display_width(&full_indication);
+         if full_indication_len <= max_length {
+             Some((
+                 foreground_color(&full_indication, self.color),
+@@ -401,7 +403,7 @@ impl PaneFrame {
+     fn render_my_focus(&self, max_length: usize) -> Option<(Vec<TerminalCharacter>, usize)> {
+         let mut left_separator = foreground_color(self.title_separator_left(), self.color);
+         let mut right_separator = foreground_color(self.title_separator_right(), self.color);
+-        let full_indication_text = "MY FOCUS";
++        let full_indication_text = tr("MY FOCUS");
+         let mut full_indication = vec![];
+         full_indication.append(&mut left_separator);
+         full_indication.push(EMPTY_TERMINAL_CHARACTER);
+@@ -409,7 +411,7 @@ impl PaneFrame {
+         full_indication.push(EMPTY_TERMINAL_CHARACTER);
+         full_indication.append(&mut right_separator);
+         let full_indication_len = full_indication_text.width() + 4; // 2 for separators 2 for padding
+-        let short_indication_text = "ME";
++        let short_indication_text = tr("ME");
+         let mut short_indication = vec![];
+         short_indication.append(&mut left_separator);
+         short_indication.push(EMPTY_TERMINAL_CHARACTER);
+@@ -431,7 +433,7 @@ impl PaneFrame {
+     ) -> Option<(Vec<TerminalCharacter>, usize)> {
+         let mut left_separator = foreground_color(self.title_separator_left(), self.color);
+         let mut right_separator = foreground_color(self.title_separator_right(), self.color);
+-        let full_indication_text = "MY FOCUS AND:";
++        let full_indication_text = tr("MY FOCUS AND:");
+         let short_indication_text = "+";
+         let mut full_indication = foreground_color(full_indication_text, self.color);
+         let mut full_indication_len = full_indication_text.width();
+@@ -475,9 +477,9 @@ impl PaneFrame {
+         let mut left_separator = foreground_color(self.title_separator_left(), self.color);
+         let mut right_separator = foreground_color(self.title_separator_right(), self.color);
+         let full_indication_text = if self.other_focused_clients.len() == 1 {
+-            "FOCUSED USER:"
++            tr("FOCUSED USER:")
+         } else {
+-            "FOCUSED USERS:"
++            tr("FOCUSED USERS:")
+         };
+         let middle_indication_text = "U:";
+         let mut full_indication = foreground_color(full_indication_text, self.color);
+@@ -1077,9 +1079,12 @@ impl PaneFrame {
+         if !(has_scroll && self.is_selectable) {
+             return None;
+         }
+-        let full_indication = format!(
+-            "SCROLL: {}/{}",
+-            self.scroll_position.0, self.scroll_position.1
++        let full_indication = trf(
++            "SCROLL: {a0}/{a1}",
++            &[
++                ("a0", self.scroll_position.0.to_string().as_str()),
++                ("a1", self.scroll_position.1.to_string().as_str()),
++            ],
+         );
+         let (full_part, full_length) = self.bracketed_title_part(&full_indication);
+         if full_length <= max_length {
+@@ -1105,20 +1110,20 @@ impl PaneFrame {
+             && self.other_focused_clients.is_empty()
+             && self.other_cursors_exist_in_session
+         {
+-            let (full_part, full_length) = self.bracketed_title_part("MY FOCUS");
++            let (full_part, full_length) = self.bracketed_title_part(tr("MY FOCUS"));
+             if full_length <= max_length {
+                 Some((full_part, full_length))
+             } else {
+-                let (short_part, short_length) = self.bracketed_title_part("ME");
++                let (short_part, short_length) = self.bracketed_title_part(tr("ME"));
+                 (short_length <= max_length).then_some((short_part, short_length))
+             }
+         } else if self.is_main_client && !self.other_focused_clients.is_empty() {
+-            self.bracketed_focused_users("MY FOCUS AND:", "+", max_length)
++            self.bracketed_focused_users(tr("MY FOCUS AND:"), "+", max_length)
+         } else if !self.other_focused_clients.is_empty() {
+             let full_label = if self.other_focused_clients.len() == 1 {
+-                "FOCUSED USER:"
++                tr("FOCUSED USER:")
+             } else {
+-                "FOCUSED USERS:"
++                tr("FOCUSED USERS:")
+             };
+             self.bracketed_focused_users(full_label, "U:", max_length)
+         } else {
+diff --git a/zellij-utils/Cargo.toml b/zellij-utils/Cargo.toml
+index a0e7e1e..a53ee8c 100644
+--- a/zellij-utils/Cargo.toml
++++ b/zellij-utils/Cargo.toml
+@@ -10,6 +10,7 @@ include = ["src/**/*", "assets/"]
+ # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+ 
+ [dependencies]
++zellij-i18n = { workspace = true }
+ anyhow = { workspace = true }
+ backtrace = { version = "0.3.55", default-features = false, features = ["std"] }
+ bitflags = { version = "2.5.0", default-features = false }
+diff --git a/zellij-utils/src/data.rs b/zellij-utils/src/data.rs
+index f364b46..f6e38f7 100644
+--- a/zellij-utils/src/data.rs
++++ b/zellij-utils/src/data.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::home::default_layout_dir;
+ use crate::input::actions::{Action, RunCommandAction};
+ use crate::input::config::{ConversionError, KdlError};
+@@ -1887,33 +1888,33 @@ impl PermissionType {
+     pub fn display_name(&self) -> String {
+         match self {
+             PermissionType::ReadApplicationState => {
+-                "Access Zellij state (Panes, Tabs and UI)".to_owned()
++                tr("Access Zellij state (Panes, Tabs and UI)").to_owned()
+             },
+             PermissionType::ChangeApplicationState => {
+-                "Change Zellij state (Panes, Tabs and UI) and run commands".to_owned()
++                tr("Change Zellij state (Panes, Tabs and UI) and run commands").to_owned()
+             },
+-            PermissionType::OpenFiles => "Open files (eg. for editing)".to_owned(),
+-            PermissionType::RunCommands => "Run commands".to_owned(),
+-            PermissionType::OpenTerminalsOrPlugins => "Start new terminals and plugins".to_owned(),
+-            PermissionType::WriteToStdin => "Write to standard input (STDIN)".to_owned(),
+-            PermissionType::WebAccess => "Make web requests".to_owned(),
+-            PermissionType::ReadCliPipes => "Control command line pipes and output".to_owned(),
++            PermissionType::OpenFiles => tr("Open files (eg. for editing)").to_owned(),
++            PermissionType::RunCommands => tr("Run commands").to_owned(),
++            PermissionType::OpenTerminalsOrPlugins => tr("Start new terminals and plugins").to_owned(),
++            PermissionType::WriteToStdin => tr("Write to standard input (STDIN)").to_owned(),
++            PermissionType::WebAccess => tr("Make web requests").to_owned(),
++            PermissionType::ReadCliPipes => tr("Control command line pipes and output").to_owned(),
+             PermissionType::MessageAndLaunchOtherPlugins => {
+-                "Send messages to and launch other plugins".to_owned()
++                tr("Send messages to and launch other plugins").to_owned()
+             },
+-            PermissionType::Reconfigure => "Change Zellij runtime configuration".to_owned(),
+-            PermissionType::FullHdAccess => "Full access to the hard-drive".to_owned(),
++            PermissionType::Reconfigure => tr("Change Zellij runtime configuration").to_owned(),
++            PermissionType::FullHdAccess => tr("Full access to the hard-drive").to_owned(),
+             PermissionType::StartWebServer => {
+-                "Start a local web server to serve Zellij sessions".to_owned()
++                tr("Start a local web server to serve Zellij sessions").to_owned()
+             },
+-            PermissionType::InterceptInput => "Intercept Input (keyboard & mouse)".to_owned(),
++            PermissionType::InterceptInput => tr("Intercept Input (keyboard & mouse)").to_owned(),
+             PermissionType::ReadPaneContents => {
+-                "Read pane contents (viewport and selection)".to_owned()
++                tr("Read pane contents (viewport and selection)").to_owned()
+             },
+-            PermissionType::RunActionsAsUser => "Execute actions as the user".to_owned(),
+-            PermissionType::WriteToClipboard => "Write to clipboard".to_owned(),
++            PermissionType::RunActionsAsUser => tr("Execute actions as the user").to_owned(),
++            PermissionType::WriteToClipboard => tr("Write to clipboard").to_owned(),
+             PermissionType::ReadSessionEnvironmentVariables => {
+-                "Read environment variables present upon session creation".to_owned()
++                tr("Read environment variables present upon session creation").to_owned()
+             },
+         }
+     }

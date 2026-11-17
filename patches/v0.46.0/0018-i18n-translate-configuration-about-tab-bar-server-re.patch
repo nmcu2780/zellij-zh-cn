@@ -1,0 +1,2395 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 21:25:13 +0800
+Subject: [PATCH 18/19] i18n: translate configuration/about/tab-bar/server
+ remaining strings and fix slug derivation
+
+---
+ default-plugins/about/src/keybindings.rs      |  27 +-
+ default-plugins/about/src/onboarding.rs       |  66 ++--
+ default-plugins/about/src/pages.rs            |   6 +-
+ default-plugins/bars/src/tab_bar/line.rs      |   9 +-
+ .../configuration/src/bindings_list.rs        | 105 ++++--
+ .../configuration/src/blocks_screen.rs        |  66 ++--
+ .../configuration/src/keybindings_screen.rs   |  31 +-
+ .../configuration/src/keys_screen.rs          | 132 ++++----
+ .../configuration/src/list_editor.rs          |  38 ++-
+ .../configuration/src/mousebindings_screen.rs | 104 +++---
+ default-plugins/configuration/src/page.rs     |  19 +-
+ default-plugins/configuration/src/settings.rs | 167 +++++++++-
+ .../configuration/src/settings_screen.rs      | 298 +++++++++++++-----
+ zellij-server/src/ui/hint_text.rs             |  18 +-
+ zellij-utils/src/desktop_integration/mod.rs   |  30 +-
+ 15 files changed, 763 insertions(+), 353 deletions(-)
+
+diff --git a/default-plugins/about/src/keybindings.rs b/default-plugins/about/src/keybindings.rs
+index 0c4c7ca..e4a4501 100644
+--- a/default-plugins/about/src/keybindings.rs
++++ b/default-plugins/about/src/keybindings.rs
+@@ -89,7 +89,24 @@ impl ExpectedBind {
+         if self.in_base_mode {
+             return tr("ANY (mode name)").to_owned();
+         }
+-        format!("{:?}", self.mode).to_uppercase()
++        match self.mode {
++            InputMode::Normal => tr("NORMAL (mode name)"),
++            InputMode::Locked => tr("LOCKED (mode name)"),
++            InputMode::Pane => tr("PANE (mode name)"),
++            InputMode::Tab => tr("TAB (mode name)"),
++            InputMode::Resize => tr("RESIZE (mode name)"),
++            InputMode::Move => tr("MOVE (mode name)"),
++            InputMode::Scroll => tr("SCROLL (mode name)"),
++            InputMode::Search => tr("SEARCH (mode name)"),
++            InputMode::EnterSearch => tr("ENTERSEARCH (mode name)"),
++            InputMode::RenameTab => tr("RENAMETAB (mode name)"),
++            InputMode::RenamePane => tr("RENAMEPANE (mode name)"),
++            InputMode::RenameSession => tr("RENAMESESSION (mode name)"),
++            InputMode::Session => tr("SESSION (mode name)"),
++            InputMode::Prompt => tr("PROMPT (mode name)"),
++            InputMode::Tmux => tr("TMUX (mode name)"),
++        }
++        .to_owned()
+     }
+     pub fn mode_in(&self, base_mode: InputMode) -> InputMode {
+         if self.in_base_mode {
+@@ -482,7 +499,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+                 no_focus: false,
+                 tab_id: None,
+             },
+-            "new floating pane",
++            tr("new floating pane"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -498,7 +515,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Pane,
+             KeyWithModifier::new(BareKey::Char('z')).with_shift_modifier(),
+             Action::ToggleBars { bars: vec![] },
+-            "hide or show the bars",
++            tr("hide or show the bars"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -526,7 +543,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             Action::SwitchToMode {
+                 input_mode: InputMode::RenameSession,
+             },
+-            "rename session",
++            tr("rename session"),
+             false,
+         )
+         .with_bound_actions(vec![
+@@ -556,7 +573,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             Action::SwitchToMode {
+                 input_mode: InputMode::Normal,
+             },
+-            "done",
++            tr("done"),
+             true,
+         )
+         .with_bound_actions(vec![])
+diff --git a/default-plugins/about/src/onboarding.rs b/default-plugins/about/src/onboarding.rs
+index 33c9303..337cc79 100644
+--- a/default-plugins/about/src/onboarding.rs
++++ b/default-plugins/about/src/onboarding.rs
+@@ -5,7 +5,7 @@ use std::rc::Rc;
+ 
+ use zellij_tile::prelude::actions::Action;
+ use zellij_tile::prelude::desktop_integration::{
+-    window_welcome_points, REMOTE_WARNING, WINDOW_WELCOME_EMPHASIS,
++    window_welcome_emphasis, window_welcome_points,
+ };
+ use zellij_tile::prelude::*;
+ 
+@@ -76,7 +76,8 @@ fn settings_link_line(prefix: &str, targets: &[(&'static str, &'static str)]) ->
+         }
+         let page = *page;
+         components.push(link(
+-            trf("Settings → {label}", &[("label", &label)]),
++            // `label` is a display name; `page` stays English (settings slug)
++            trf("Settings → {label}", &[("label", &tr(*label))]),
+             ClickAction::new_run(move || open_settings(Some(page))),
+         ));
+     }
+@@ -117,7 +118,7 @@ impl Page {
+         }
+         keys.push(key_line(
+             "<s>",
+-            "Setup Zellij: tray icon, default terminal and more",
++            tr("Setup Zellij: tray icon, default terminal and more"),
+         ));
+         let mut help = String::from(tr("Help:"));
+         if !facts.in_desktop_terminal {
+@@ -142,10 +143,13 @@ impl Page {
+             ])
+             .with_paragraph(keys)
+             .with_paragraph(vec![settings_link_line(
+-                "Configure it: ",
++                tr("Configure it: "),
+                 &[("Zellij terminal", "zellij_terminal")],
+             )])
+-            .with_paragraph(vec![styled(Text::from(REMOTE_WARNING).color_range(1, ..))])
++            .with_paragraph(vec![styled(
++                Text::from(tr("The window opens on the computer running Zellij."))
++                    .color_range(1, ..),
++            )])
+             .with_help(Box::new(
+                 move |_hovering_over_link, _menu_item_is_selected| {
+                     Text::from(help.clone())
+@@ -158,7 +162,7 @@ impl Page {
+     }
+ 
+     pub fn new_inbox(shared: &Shared) -> Page {
+-        let terminal = link("terminal", terminal_page_action(shared));
++        let terminal = link(tr("terminal"), terminal_page_action(shared));
+         let inbox_keys = shared.keybinding_state.borrow().inbox_keys();
+         let mut page = Page::new()
+             .with_kind(PageKind::Inbox)
+@@ -177,7 +181,7 @@ impl Page {
+                 ComponentLine::new(vec![
+                     text_piece(tr("Many programs will work out of the box. For others, see ")),
+                     link(
+-                        "our integrations",
++                        tr("our integrations"),
+                         ClickAction::new_open_link(
+                             INTEGRATIONS_URL.to_owned(),
+                             shared.link_executable.clone(),
+@@ -188,7 +192,7 @@ impl Page {
+             ])
+             .with_paragraph(vec![try_it_out_line(
+                 inbox_keys,
+-                "open the inbox",
++                tr("open the inbox"),
+                 open_inbox_action(shared),
+             )]);
+         for feature in [Feature::Inbox, Feature::SessionHistory] {
+@@ -198,7 +202,7 @@ impl Page {
+             }
+         }
+         page.with_paragraph(vec![settings_link_line(
+-            "Don't want this? ",
++            tr("Don't want this? "),
+             &[("Attention", "attention")],
+         )])
+         .with_help(Box::new(feature_page_help))
+@@ -212,20 +216,23 @@ impl Page {
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     text_piece(tr("The ")),
+-                    link("session manager", open_session_manager_action(shared)),
++                    link(tr("session manager"), open_session_manager_action(shared)),
+                     text_piece(tr(" now includes session previews, allowing you to")),
+                 ]),
+                 line(tr("both view all sessions running on the machine and type into them for quick")),
+                 line(tr("commands without switching. This also integrates with the")),
+                 ComponentLine::new(vec![
+-                    link("desktop client and tray icon", terminal_page_action(shared)),
++                    link(
++                        tr("desktop client and tray icon"),
++                        terminal_page_action(shared),
++                    ),
+                     text_piece(tr(", allowing you to browse sessions at a glance")),
+                 ]),
+                 line(tr("without opening a terminal.")),
+             ])
+             .with_paragraph(vec![try_it_out_line(
+                 session_manager_keys,
+-                "open the session manager",
++                tr("open the session manager"),
+                 open_session_manager_action(shared),
+             )])
+             .with_help(Box::new(feature_page_help))
+@@ -238,19 +245,20 @@ impl Page {
+             )
+             .with_paragraph(vec![
+                 line(tr("Zellij now includes a configurable right-click menu, allowing quick actions")),
+-                line(
++                line(tr(
+                     "with a mouse click. The menu is contextual on terminal panes, tabs and stack",
+-                ),
++                )),
+                 line(tr("titles.")),
+             ])
+             .with_paragraph(vec![styled(
+-                Text::from(
++                // keep the highlighted phrase verbatim in the translation
++                Text::from(tr(
+                     "It's now also possible to create a floating pane by Ctrl+dragging the mouse.",
+-                )
++                ))
+                 .color_substring(3, "Ctrl+dragging"),
+             )])
+             .with_paragraph(vec![settings_link_line(
+-                "Don't want this? ",
++                tr("Don't want this? "),
+                 &[
+                     ("Right-click menu", "right_click_menu"),
+                     ("Mouse bindings", "mouse_bindings"),
+@@ -270,16 +278,16 @@ impl Page {
+             ])
+             .with_paragraph(vec![ComponentLine::new(vec![
+                 text_piece(tr("Open it: ")),
+-                link("Settings", ClickAction::new_run(|| open_settings(None))),
++                link(tr("Settings"), ClickAction::new_run(|| open_settings(None))),
+             ])])
+             .with_help(Box::new(feature_page_help))
+     }
+ 
+     pub fn new_window_welcome(missing_services: &[String], only_missing: bool) -> Page {
+         let title = if only_missing {
+-            "Something is missing on this desktop"
++            tr("Something is missing on this desktop")
+         } else {
+-            "Welcome to the Zellij terminal"
++            tr("Welcome to the Zellij terminal")
+         };
+         let mut lines = vec![];
+         for text in window_welcome_points(only_missing) {
+@@ -302,9 +310,9 @@ impl Page {
+     pub fn new_repair(missing: &str, current: &str) -> Page {
+         let mut lines = vec![];
+         for wrapped in wrap(
+-            &format!(
+-                "Your Zellij launcher points to {}, which no longer exists. Point it at this copy ({})?",
+-                missing, current
++            &trf(
++                "Your Zellij launcher points to {a0}, which no longer exists. Point it at this copy ({a1})?",
++                &[("a0", missing), ("a1", current)],
+             ),
+             76,
+         ) {
+@@ -355,7 +363,9 @@ impl Page {
+                 line(tr("It has a tray icon and desktop notifications, and closing a window keeps")),
+                 line(tr("its session running. Its launcher's right-click menu has Show Inbox and")),
+                 line(tr("Show Sessions, and Zellij can become your default terminal (Setup Zellij).")),
+-                styled(Text::from(REMOTE_WARNING).dim_all()),
++                styled(
++                    Text::from(tr("The window opens on the computer running Zellij.")).dim_all(),
++                ),
+             ],
+         )
+     }
+@@ -506,7 +516,7 @@ pub fn kdl_for_binds(binds: &[(InputMode, KeyWithModifier, Vec<Action>)]) -> Vec
+ }
+ 
+ fn emphasis_ranges(text: &str) -> Vec<(usize, usize, usize)> {
+-    WINDOW_WELCOME_EMPHASIS
++    window_welcome_emphasis()
+         .iter()
+         .filter_map(|(phrase, level)| {
+             text.find(phrase).map(|byte_start| {
+@@ -540,6 +550,7 @@ pub fn bulleted(text: &str, width: usize) -> Vec<ComponentLine> {
+ }
+ 
+ pub fn wrap(text: &str, width: usize) -> Vec<String> {
++    let width = width.max(10);
+     let mut lines = vec![];
+     let mut current = String::new();
+     for word in text.split_whitespace() {
+@@ -548,7 +559,8 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
+         } else {
+             format!("{} {}", current, word)
+         };
+-        if candidate.chars().count() > width && !current.is_empty() {
++        // compare display width rather than char count: CJK cells are 2 wide
++        if zellij_tile::graphemes::display_width(&candidate) > width && !current.is_empty() {
+             lines.push(std::mem::take(&mut current));
+             current = word.to_owned();
+         } else {
+@@ -575,7 +587,7 @@ mod window_welcome_tests {
+     #[test]
+     fn every_emphasized_phrase_is_in_a_point() {
+         let points = window_welcome_points(false).join(" ");
+-        for (phrase, _) in WINDOW_WELCOME_EMPHASIS {
++        for (phrase, _) in window_welcome_emphasis() {
+             assert!(points.contains(phrase), "{}", phrase);
+         }
+     }
+diff --git a/default-plugins/about/src/pages.rs b/default-plugins/about/src/pages.rs
+index f412ef7..990f4a8 100644
+--- a/default-plugins/about/src/pages.rs
++++ b/default-plugins/about/src/pages.rs
+@@ -82,14 +82,14 @@ impl Page {
+             .with_title(main_screen_title(zellij_version.clone(), is_release_notes))
+             .with_bulletin_list(BulletinList::new(whats_new_title()).with_items(vec![
+                 main_menu_entry(
+-                    "Zellij Can Now be Your Terminal",
++                    tr("Zellij Can Now be Your Terminal"),
+                     &shared,
+                     Page::new_desktop_app,
+                 ),
+                 main_menu_entry(tr("Inbox"), &shared, Page::new_inbox),
+                 main_menu_entry(tr("Session Previews"), &shared, Page::new_session_previews),
+                 main_menu_entry(
+-                    "Right-click Menu and Improved Mouse Control",
++                    tr("Right-click Menu and Improved Mouse Control"),
+                     &shared,
+                     Page::new_mouse_control,
+                 ),
+@@ -399,7 +399,7 @@ const FEATURE_SENTENCE_WIDTH: usize = 78;
+ fn feature_sentence(shared: &Shared) -> Vec<ComponentLine> {
+     let features = shared.keybinding_state.borrow().features_to_add();
+     let mut pieces: Vec<(String, Option<Feature>)> = vec![(
+-        "This version includes new keybindings for ".to_owned(),
++        tr("This version includes new keybindings for ").to_owned(),
+         None,
+     )];
+     for (feature_index, feature) in features.iter().enumerate() {
+diff --git a/default-plugins/bars/src/tab_bar/line.rs b/default-plugins/bars/src/tab_bar/line.rs
+index e5efc5b..496cfe0 100644
+--- a/default-plugins/bars/src/tab_bar/line.rs
++++ b/default-plugins/bars/src/tab_bar/line.rs
+@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
+ 
+ use crate::session_indicator::SessionIndicator;
+ use crate::tab_bar::{LinePart, ARROW_SEPARATOR};
++use zellij_i18n::trf;
+ use zellij_tile::graphemes::display_width;
+ use zellij_tile::prelude::*;
+ use zellij_tile_utils::style;
+@@ -516,7 +517,13 @@ fn hint_line_part(
+ 
+ fn scroll_status(scroll: (usize, usize), palette: Styling, dimmed: bool) -> LinePart {
+     let (position, length) = scroll;
+-    let text = format!("[ SCROLL {}/{} ]", position, length);
++    let text = trf(
++        "[ SCROLL {a0}/{a1} ]",
++        &[
++            ("a0", position.to_string().as_str()),
++            ("a1", length.to_string().as_str()),
++        ],
++    );
+     let text_color = palette.text_unselected.base;
+     let bg_color = palette.text_unselected.background;
+     let text_style = if dimmed {
+diff --git a/default-plugins/configuration/src/bindings_list.rs b/default-plugins/configuration/src/bindings_list.rs
+index 16aa329..9dd9856 100644
+--- a/default-plugins/configuration/src/bindings_list.rs
++++ b/default-plugins/configuration/src/bindings_list.rs
+@@ -1,9 +1,11 @@
+-use zellij_i18n::{tr, tr_dyn, trf};
++use zellij_i18n::{tr, trf};
+ use std::collections::BTreeSet;
+ 
+ use zellij_tile::prelude::*;
+ use zellij_tile::graphemes::display_width;
+ 
++use crate::settings::heading_label;
++
+ use crate::page::{
+     action_argument_range, action_display_text, actions_summary, changed_by, confirm_removals,
+     is_click, is_plain, is_shift_tab, markers, note_dropdown, outside_overlays, print_dim,
+@@ -40,8 +42,27 @@ pub fn all_modes() -> Vec<InputMode> {
+         .collect()
+ }
+ 
++/// Display name of an input mode in the mode dropdown and scope texts.
++/// Selection is index-based, so translating here is safe.
+ pub fn mode_name(mode: InputMode) -> String {
+-    format!("{:?}", mode)
++    match mode {
++        InputMode::Normal => tr("Normal"),
++        InputMode::Locked => tr("Locked"),
++        InputMode::Pane => tr("Pane"),
++        InputMode::Tab => tr("Tab"),
++        InputMode::Resize => tr("Resize"),
++        InputMode::Move => tr("Move"),
++        InputMode::Scroll => tr("Scroll"),
++        InputMode::Search => tr("Search"),
++        InputMode::EnterSearch => tr("EnterSearch"),
++        InputMode::RenameTab => tr("RenameTab"),
++        InputMode::RenamePane => tr("RenamePane"),
++        InputMode::RenameSession => tr("RenameSession"),
++        InputMode::Session => tr("Session"),
++        InputMode::Prompt => tr("Prompt"),
++        InputMode::Tmux => tr("Tmux"),
++    }
++    .to_owned()
+ }
+ 
+ pub const ALL_MODES: &str = "All modes";
+@@ -74,7 +95,7 @@ pub trait ListEntry: Clone {
+     fn columns(&self) -> Vec<String> {
+         let actions = match self.bound_actions() {
+             Some(actions) => actions_summary(actions),
+-            None => "(unbound)".to_owned(),
++            None => tr("(unbound)").to_owned(),
+         };
+         vec![self.label(), actions]
+     }
+@@ -252,7 +273,7 @@ impl<E: ListEntry> BindingsList<E> {
+     pub fn new(texts: ListTexts) -> Self {
+         let modes: Vec<String> = texts
+             .all_modes_option
+-            .then(|| ALL_MODES.to_owned())
++            .then(|| tr("All modes").to_owned())
+             .into_iter()
+             .chain(all_modes().into_iter().map(mode_name))
+             .collect();
+@@ -459,18 +480,20 @@ impl<E: ListEntry> BindingsList<E> {
+                 .collect();
+             let skipped = targets.len() - resettable.len();
+             if resettable.is_empty() {
+-                self.notice = Some(format!(
+-                    "None of the marked {} differ from the preset",
+-                    plural
++                self.notice = Some(trf(
++                    "None of the marked {a0} differ from the preset",
++                    &[("a0", plural.to_string().as_str())],
+                 ));
+                 return;
+             }
+             self.notice = Some(if skipped > 0 {
+-                format!(
+-                    "Reset {} {} to the preset; {} already use it or come from the layout",
+-                    resettable.len(),
+-                    plural,
+-                    skipped
++                trf(
++                    "Reset {a0} {a1} to the preset; {a2} already use it or come from the layout",
++                    &[
++                        ("a0", resettable.len().to_string().as_str()),
++                        ("a1", plural.to_string().as_str()),
++                        ("a2", skipped.to_string().as_str()),
++                    ],
+                 )
+             } else {
+                 trf("Reset {a0} {a1} to the preset", &[("a0", resettable.len().to_string().as_str()), ("a1", plural.to_string().as_str()), ])
+@@ -495,12 +518,15 @@ impl<E: ListEntry> BindingsList<E> {
+                 self.clear_marks();
+             },
+             KeybindingSource::Preset => {
+-                self.notice = Some(format!("{} already uses the preset's binding", label))
++                self.notice = Some(trf(
++                    "{a0} already uses the preset's binding",
++                    &[("a0", label.to_string().as_str())],
++                ))
+             },
+             KeybindingSource::Layout => {
+-                self.notice = Some(format!(
+-                    "{} comes from the layout and cannot be changed here",
+-                    label
++                self.notice = Some(trf(
++                    "{a0} comes from the layout and cannot be changed here",
++                    &[("a0", label.to_string().as_str())],
+                 ))
+             },
+         }
+@@ -520,16 +546,20 @@ impl<E: ListEntry> BindingsList<E> {
+         }
+         self.notice = match (removed, entries.as_slice(), last_error) {
+             (0, _, Some(error)) => Some(error),
+-            (1, [entry], _) => Some(format!(
+-                "Deleted {} from {}",
+-                entry.label(),
+-                scope_text(entry.mode())
++            (1, [entry], _) => Some(trf(
++                "Deleted {a0} from {a1}",
++                &[
++                    ("a0", entry.label().to_string().as_str()),
++                    ("a1", scope_text(entry.mode()).as_str()),
++                ],
+             )),
+-            (removed, entries, _) if removed < entries.len() => Some(format!(
+-                "Deleted {} {}; {} could not be deleted",
+-                removed,
+-                plural,
+-                entries.len() - removed
++            (removed, entries, _) if removed < entries.len() => Some(trf(
++                "Deleted {a0} {a1}; {a2} could not be deleted",
++                &[
++                    ("a0", removed.to_string().as_str()),
++                    ("a1", plural.to_string().as_str()),
++                    ("a2", (entries.len() - removed).to_string().as_str()),
++                ],
+             )),
+             (removed, _, _) => Some(trf("Deleted {a0} {a1}", &[("a0", removed.to_string().as_str()), ("a1", plural.to_string().as_str()), ])),
+         };
+@@ -573,9 +603,12 @@ impl<E: ListEntry> BindingsList<E> {
+                 let skipped = targets.len() - entries.len();
+                 let mut question = trf("Delete {a0} {a1}?", &[("a0", entries.len().to_string().as_str()), ("a1", plural.to_string().as_str()), ]);
+                 if skipped > 0 {
+-                    question.push_str(&format!(
+-                        " {} marked {} cannot be deleted and stay.",
+-                        skipped, plural
++                    question.push_str(&trf(
++                        " {a0} marked {a1} cannot be deleted and stay.",
++                        &[
++                            ("a0", skipped.to_string().as_str()),
++                            ("a1", plural.to_string().as_str()),
++                        ],
+                     ));
+                 }
+                 Text::from(question)
+@@ -666,9 +699,9 @@ impl<E: ListEntry> BindingsList<E> {
+     }
+     fn mark_label(&self, category: Option<&str>) -> &'static str {
+         if self.group_is_marked(category) {
+-            "Unmark all"
++            tr("Unmark all")
+         } else {
+-            "Mark all"
++            tr("Mark all")
+         }
+     }
+     fn print_mark_button(
+@@ -1037,7 +1070,7 @@ impl<E: ListEntry> BindingsList<E> {
+         }
+     }
+     pub fn render(&mut self, x: usize, y: usize, width: usize, height: usize) {
+-        let title = self.texts.title;
++        let title = heading_label(self.texts.title);
+         print_text_with_coordinates(
+             Text::from(truncate(title, width)).color_all(2),
+             x,
+@@ -1045,7 +1078,9 @@ impl<E: ListEntry> BindingsList<E> {
+             None,
+             None,
+         );
+-        let search_x = title.chars().count() + 2;
++        // `search_x` is a cell offset, so use display width of the translated
++        // title rather than its char count
++        let search_x = display_width(title) + 2;
+         let search_end = BESIDE_SHORT_FIELD + Button::new(tr("Unmark all")).natural_width();
+         let search_width = search_end.min(width).saturating_sub(search_x);
+         let search_focused = self.focused && self.focus == ListFocus::Search;
+@@ -1122,7 +1157,7 @@ impl<E: ListEntry> BindingsList<E> {
+             .iter()
+             .filter_map(|item| match item {
+                 ListItem::Heading(label) => {
+-                    Some(display_width(&tr_dyn(label)) + 2 + button_width)
++                    Some(display_width(heading_label(label)) + 2 + button_width)
+                 },
+                 _ => None,
+             })
+@@ -1174,13 +1209,13 @@ impl<E: ListEntry> BindingsList<E> {
+                 ListItem::Gap => {},
+                 ListItem::Heading(label) => {
+                     print_text_with_coordinates(
+-                        Text::from(truncate(&tr_dyn(label), row_width)).color_all(0),
++                        Text::from(truncate(heading_label(label), row_width)).color_all(0),
+                         x,
+                         screen_y,
+                         None,
+                         None,
+                     );
+-                    let label_x = x + display_width(&tr_dyn(label)) + 2;
++                    let label_x = x + display_width(heading_label(label)) + 2;
+                     self.print_mark_button(
+                         &mut previous_buttons,
+                         Some(label.clone()),
+diff --git a/default-plugins/configuration/src/blocks_screen.rs b/default-plugins/configuration/src/blocks_screen.rs
+index 0693269..e33410f 100644
+--- a/default-plugins/configuration/src/blocks_screen.rs
++++ b/default-plugins/configuration/src/blocks_screen.rs
+@@ -21,9 +21,9 @@ fn pairs_field(label: &'static str) -> FieldSpec {
+ pub fn check_plugin_location(text: &str, allow_alias: bool) -> Result<String, String> {
+     let text = text.trim();
+     let error = if allow_alias {
+-        "Use a plugin URL (https://…), zellij:name, file:/path, or an alias name"
++        tr("Use a plugin URL (https://…), zellij:name, file:/path, or an alias name")
+     } else {
+-        "Use a plugin URL (https://…), zellij:name or file:/path"
++        tr("Use a plugin URL (https://…), zellij:name or file:/path")
+     };
+     if text.is_empty() || text.chars().any(|c| c.is_control()) {
+         return Err(error.to_owned());
+@@ -62,13 +62,16 @@ pub fn check_plugin_location(text: &str, allow_alias: bool) -> Result<String, St
+ pub fn check_name(text: &str, what: &str) -> Result<String, String> {
+     let text = text.trim();
+     if text.is_empty() {
+-        return Err(format!("A {} is needed", what));
++        return Err(trf("A {a0} is needed", &[("a0", what)]));
+     }
+     if !text
+         .chars()
+         .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+     {
+-        return Err(format!("A {} can use letters, digits, '-' and '_'", what));
++        return Err(trf(
++            "A {a0} can use letters, digits, '-' and '_'",
++            &[("a0", what)],
++        ));
+     }
+     Ok(text.to_owned())
+ }
+@@ -107,7 +110,7 @@ fn check_path(text: &str) -> Result<Option<String>, String> {
+ fn check_pairs(pairs: Vec<(String, String)>) -> Result<Vec<(String, String)>, String> {
+     let mut checked: Vec<(String, String)> = vec![];
+     for (key, value) in pairs {
+-        let key = check_name(&key, "config key")?;
++        let key = check_name(&key, tr("config key"))?;
+         if checked.iter().any(|(existing, _)| *existing == key) {
+             return Err(trf("{a0} is set twice", &[("a0", key.to_string().as_str()), ]));
+         }
+@@ -162,7 +165,7 @@ impl EntryKind for AliasKind {
+         tr("Plugin aliases").to_owned()
+     }
+     fn noun(&self) -> &'static str {
+-        "plugin alias"
++        tr("plugin alias")
+     }
+     fn identity(&self, entry: &PluginAliasEntry) -> String {
+         entry.name.clone()
+@@ -179,10 +182,10 @@ impl EntryKind for AliasKind {
+     }
+     fn fields(&self) -> Vec<FieldSpec> {
+         vec![
+-            text_field("Name", "my-plugin"),
+-            text_field("Location", "zellij:name, file:/path or https://…"),
+-            text_field("Folder", "optional"),
+-            pairs_field("Config"),
++            text_field(tr("Name"), "my-plugin"),
++            text_field(tr("Location"), "zellij:name, file:/path or https://…"),
++            text_field(tr("Folder"), tr("optional")),
++            pairs_field(tr("Config")),
+         ]
+     }
+     fn to_values(&self, entry: &PluginAliasEntry) -> Vec<FieldValue> {
+@@ -195,7 +198,7 @@ impl EntryKind for AliasKind {
+     }
+     fn from_values(&self, values: &[FieldValue]) -> Result<PluginAliasEntry, String> {
+         Ok(PluginAliasEntry {
+-            name: check_name(&values[0].text(), "name")?,
++            name: check_name(&values[0].text(), tr("name"))?,
+             plugin: PluginEntry {
+                 location: check_plugin_location(&values[1].text(), false)?,
+                 cwd: check_path(&values[2].text())?,
+@@ -218,9 +221,9 @@ impl EntryKind for AliasKind {
+         defaults: &[PluginAliasEntry],
+     ) -> Result<(), String> {
+         if defaults.iter().any(|default| default.name == entry.name) {
+-            Err(format!(
+-                "{} is built in and cannot be removed; edit it, or press r to undo your change",
+-                entry.name
++            Err(trf(
++                "{a0} is built in and cannot be removed; edit it, or press r to undo your change",
++                &[("a0", entry.name.as_str())],
+             ))
+         } else {
+             Ok(())
+@@ -233,13 +236,13 @@ pub struct LoadPluginKind;
+ impl EntryKind for LoadPluginKind {
+     type Entry = PluginEntry;
+     fn title(&self) -> String {
+-        "Plugins loaded at start (load_plugins)".to_owned()
++        tr("Plugins loaded at start (load_plugins)").to_owned()
+     }
+     fn short_title(&self) -> String {
+         tr("Plugins loaded at start").to_owned()
+     }
+     fn noun(&self) -> &'static str {
+-        "plugin"
++        tr("plugin")
+     }
+     fn identity(&self, entry: &PluginEntry) -> String {
+         entry.location.clone()
+@@ -252,9 +255,12 @@ impl EntryKind for LoadPluginKind {
+     }
+     fn fields(&self) -> Vec<FieldSpec> {
+         vec![
+-            text_field("Plugin", "alias, zellij:name, file:/path or https://…"),
+-            text_field("Folder", "optional"),
+-            pairs_field("Config"),
++            text_field(
++                tr("Plugin"),
++                tr("alias, zellij:name, file:/path or https://…"),
++            ),
++            text_field(tr("Folder"), tr("optional")),
++            pairs_field(tr("Config")),
+         ]
+     }
+     fn to_values(&self, entry: &PluginEntry) -> Vec<FieldValue> {
+@@ -293,7 +299,7 @@ pub struct EnvKind;
+ impl EntryKind for EnvKind {
+     type Entry = EnvVarEntry;
+     fn title(&self) -> String {
+-        "Environment variables for new panes (env)".to_owned()
++        tr("Environment variables for new panes (env)").to_owned()
+     }
+     fn short_title(&self) -> String {
+         tr("Environment variables").to_owned()
+@@ -302,7 +308,7 @@ impl EntryKind for EnvKind {
+         Some(tr("new panes, for everyone in this session").to_owned())
+     }
+     fn noun(&self) -> &'static str {
+-        "variable"
++        tr("variable")
+     }
+     fn identity(&self, entry: &EnvVarEntry) -> String {
+         entry.name.clone()
+@@ -314,7 +320,7 @@ impl EntryKind for EnvKind {
+         format!("{}={}", entry.name, entry.value)
+     }
+     fn fields(&self) -> Vec<FieldSpec> {
+-        vec![text_field("Name", "MY_VARIABLE"), text_field("Value", "")]
++        vec![text_field(tr("Name"), "MY_VARIABLE"), text_field(tr("Value"), "")]
+     }
+     fn to_values(&self, entry: &EnvVarEntry) -> Vec<FieldValue> {
+         vec![
+@@ -362,10 +368,10 @@ const MENU_ENTRY_KINDS: &[&str] = &[ITEM, SEPARATOR];
+ 
+ fn section_title(section: &str) -> String {
+     match section {
+-        "pane" => "Pane menu (right click on a pane or its frame)".to_owned(),
+-        "tab" => "Tab menu (right click on a tab)".to_owned(),
+-        "bar" => "Bar menu (right click on an empty part of the tab bar)".to_owned(),
+-        "common" => "Common items (added at the end of every menu)".to_owned(),
++        "pane" => tr("Pane menu (right click on a pane or its frame)").to_owned(),
++        "tab" => tr("Tab menu (right click on a tab)").to_owned(),
++        "bar" => tr("Bar menu (right click on an empty part of the tab bar)").to_owned(),
++        "common" => tr("Common items (added at the end of every menu)").to_owned(),
+         other => trf("{a0} menu", &[("a0", other.to_string().as_str()), ]),
+     }
+ }
+@@ -388,7 +394,7 @@ impl EntryKind for MenuKind {
+         }
+     }
+     fn noun(&self) -> &'static str {
+-        "item"
++        tr("item")
+     }
+     fn identity(&self, entry: &MenuItemEntry) -> String {
+         entry.label.clone().unwrap_or_else(|| SEPARATOR.to_owned())
+@@ -430,9 +436,9 @@ impl EntryKind for MenuKind {
+     }
+     fn fields(&self) -> Vec<FieldSpec> {
+         vec![
+-            FieldSpec::choice("Kind", MENU_ENTRY_KINDS),
+-            text_field("Label", "shown in the menu").when(0, ITEM),
+-            FieldSpec::actions("Actions").when(0, ITEM),
++            FieldSpec::choice(tr("Kind"), MENU_ENTRY_KINDS),
++            text_field(tr("Label"), tr("shown in the menu")).when(0, ITEM),
++            FieldSpec::actions(tr("Actions")).when(0, ITEM),
+         ]
+     }
+     fn to_values(&self, entry: &MenuItemEntry) -> Vec<FieldValue> {
+diff --git a/default-plugins/configuration/src/keybindings_screen.rs b/default-plugins/configuration/src/keybindings_screen.rs
+index bd6b5f8..e0a5a90 100644
+--- a/default-plugins/configuration/src/keybindings_screen.rs
++++ b/default-plugins/configuration/src/keybindings_screen.rs
+@@ -164,7 +164,7 @@ pub fn category_of(actions: &[String]) -> &'static str {
+         | "UndoRenameSession"
+         | "MarkPaneSeen"
+         | "MarkAllSeen"
+-        | "OpenContextMenu" => tr("Session and plugins"),
++        | "OpenContextMenu" => "Session and plugins",
+         "MuteTab" => "Tabs",
+         name if name.starts_with("Search") => "Search",
+         name if name.contains("Scroll")
+@@ -196,17 +196,22 @@ fn entry_category(entry: &KeybindingEntry) -> &'static str {
+     }
+ }
+ 
+-const TEXTS: ListTexts = ListTexts {
+-    title: "Keybindings",
+-    search_placeholder: "/ to search keys and actions",
+-    search_hint: "search keys and actions",
+-    items_hint: "keys",
+-    plural: "keys",
+-    no_matches: "No matching keys",
+-    empty: "No keys · a: bind a key",
+-    categories: &CATEGORY_ORDER,
+-    all_modes_option: false,
+-};
++/// Display texts are translated here; `categories` stays English because the
++/// literals double as grouping identifiers (they are translated at display
++/// time via `heading_label`).
++fn texts() -> ListTexts {
++    ListTexts {
++        title: tr("Keybindings"),
++        search_placeholder: tr("/ to search keys and actions"),
++        search_hint: tr("search keys and actions"),
++        items_hint: tr("keys"),
++        plural: tr("keys"),
++        no_matches: tr("No matching keys"),
++        empty: tr("No keys · a: bind a key"),
++        categories: &CATEGORY_ORDER,
++        all_modes_option: false,
++    }
++}
+ 
+ impl ListEntry for KeybindingEntry {
+     type Id = (InputMode, KeyWithModifier);
+@@ -335,7 +340,7 @@ pub struct KeybindingsScreen {
+ impl Default for KeybindingsScreen {
+     fn default() -> Self {
+         KeybindingsScreen {
+-            list: BindingsList::new(TEXTS),
++            list: BindingsList::new(texts()),
+             selection: KeybindsSelectionSnapshot::default(),
+             form: None,
+             dialog: ConfirmDialog::new("", ""),
+diff --git a/default-plugins/configuration/src/keys_screen.rs b/default-plugins/configuration/src/keys_screen.rs
+index f4df484..0b28930 100644
+--- a/default-plugins/configuration/src/keys_screen.rs
++++ b/default-plugins/configuration/src/keys_screen.rs
+@@ -7,8 +7,18 @@ use crate::settings::kdl_string;
+ use crate::ui_components::{print_link, request_close};
+ 
+ const LABEL_WIDTH: usize = 16;
+-const PRESET_EXPLANATION: &str =
+-    "Presets change how modes are reached and help avoid key clashes with other programs";
++fn preset_explanation() -> &'static str {
++    tr("Presets change how modes are reached and help avoid key clashes with other programs")
++}
++/// Example captions come from preset files (user data). Translate the ones
++/// shipped with Zellij and pass anything else through.
++fn example_text(text: &str) -> &str {
++    match text {
++        "to enter PANE mode" => tr("to enter PANE mode"),
++        "to enter TAB mode" => tr("to enter TAB mode"),
++        other => other,
++    }
++}
+ const FIELD_WIDTH: usize = 44;
+ const CUSTOM_PRESET: &str = "custom";
+ const SAVED_PRESET_NAME: &str = "my-keybindings";
+@@ -91,7 +101,7 @@ fn preset_label(name: &str) -> String {
+         .collect();
+     let label = words.join(" ");
+     if name == "unlock-first" {
+-        format!("{} (Avoids Collisions)", label)
++        trf("{a0} (Avoids Collisions)", &[("a0", label.as_str())])
+     } else {
+         label
+     }
+@@ -394,9 +404,9 @@ impl KeysScreen {
+         if let Some(other) = other.filter(|other| self.uses(other)) {
+             if let Some(other_value) = self.leader_value(other) {
+                 if Self::modifier_set(&other_value) == Self::modifier_set(&value) {
+-                    self.notice = Some(format!(
+-                        "The primary and secondary keys must differ (both would be {})",
+-                        value
++                    self.notice = Some(trf(
++                        "The primary and secondary keys must differ (both would be {a0})",
++                        &[("a0", value.as_str())],
+                     ));
+                     self.rebuild();
+                     return;
+@@ -446,33 +456,36 @@ impl KeysScreen {
+         } else {
+             self.copy_name_for(&self.selection.active.name)
+         };
+-        let mut input = TextInput::new(name).label("Name").label_width(6).focused();
++        let mut input = TextInput::new(name)
++            .label(tr("Name"))
++            .label_width(6)
++            .focused();
+         input.move_to_end();
+         let (title, save_label, explanation) = match &then_switch_to {
+             Some(preset) => (
+-                "Save your keybindings first",
+-                "Save and switch",
+-                format!(
+-                    "Your keybindings will be saved as a preset in your keybinds folder, then the {} preset will be used. You can go back to them at any time by choosing the saved preset here.",
+-                    preset
++                tr("Save your keybindings first"),
++                tr("Save and switch"),
++                trf(
++                    "Your keybindings will be saved as a preset in your keybinds folder, then the {a0} preset will be used. You can go back to them at any time by choosing the saved preset here.",
++                    &[("a0", preset.as_str())],
+                 ),
+             ),
+             None if !self.is_custom() => (
+-                "Save as a preset",
+-                "Save",
+-                format!(
+-                    "The {} preset will be saved as a new preset in your keybinds folder and used from now on. You can then edit its file to change any key.",
+-                    self.selection.active.display_name
++                tr("Save as a preset"),
++                tr("Save"),
++                trf(
++                    "The {a0} preset will be saved as a new preset in your keybinds folder and used from now on. You can then edit its file to change any key.",
++                    &[("a0", self.selection.active.display_name.as_str())],
+                 ),
+             ),
+             None => (
+-                "Save as a preset",
+-                "Save",
++                tr("Save as a preset"),
++                tr("Save"),
+                 tr("Your keybindings will be saved as a preset in your keybinds folder and used from now on. The keybinds block in your config file will be replaced by the preset's name.").to_owned(),
+             ),
+         };
+         let dialog = ConfirmDialog::new(title, format!("{}\n\n\n", explanation))
+-            .buttons(vec![save_label, "Cancel"])
++            .buttons(vec![save_label, tr("Cancel")])
+             .width(NAMING_WIDTH)
+             .opened();
+         self.naming = Some(PresetNaming {
+@@ -489,12 +502,16 @@ impl KeysScreen {
+         naming.dialog.open();
+         let name = naming.input.get_text().trim().to_owned();
+         if !is_usable_preset_name(&name) {
+-            naming.error = Some("Use letters, digits, '-' and '_' for the name".to_owned());
++            naming.error =
++                Some(tr("Use letters, digits, '-' and '_' for the name").to_owned());
+             return;
+         }
+         if self.presets.iter().any(|preset| preset.name == name) {
+             if let Some(naming) = self.naming.as_mut() {
+-                naming.error = Some(format!("A preset called {} already exists", name));
++                naming.error = Some(trf(
++                    "A preset called {a0} already exists",
++                    &[("a0", name.as_str())],
++                ));
+             }
+             return;
+         }
+@@ -503,9 +520,9 @@ impl KeysScreen {
+             match copy_keybind_preset(&preset, &name) {
+                 Ok(saved) => {
+                     self.naming = None;
+-                    self.notice = Some(format!(
+-                        "Saved the {} preset as {} and switched to it",
+-                        preset, saved
++                    self.notice = Some(trf(
++                        "Saved the {a0} preset as {a1} and switched to it",
++                        &[("a0", &preset), ("a1", &saved)],
+                     ));
+                     self.apply(format!("keybinds preset={}", kdl_string(&saved)));
+                 },
+@@ -541,13 +558,13 @@ impl KeysScreen {
+         }
+         self.apply(format!("keybinds preset={}", kdl_string(preset)));
+         self.notice = Some(match saved {
+-            Some(saved) if saved == preset => format!(
+-                "Saved your keybindings as the preset {} and switched to it",
+-                saved
++            Some(saved) if saved == preset => trf(
++                "Saved your keybindings as the preset {a0} and switched to it",
++                &[("a0", saved)],
+             ),
+-            Some(saved) => format!(
+-                "Switched to the {} preset; your keybindings are saved as the preset {}",
+-                preset, saved
++            Some(saved) => trf(
++                "Switched to the {a0} preset; your keybindings are saved as the preset {a1}",
++                &[("a0", preset), ("a1", saved)],
+             ),
+             None => trf("Switched to the {a0} preset", &[("a0", preset.to_string().as_str()), ]),
+         });
+@@ -637,16 +654,16 @@ impl KeysScreen {
+             trf("Your keybinds block has clear-defaults=true, so it defines every key itself. Switching removes that block and uses the {a0} preset instead. Save your keybindings as a preset first to be able to go back to them by choosing it here.", &[("a0", preset.to_string().as_str()), ])
+         };
+         if let Some(default_mode) = &self.configured_default_mode {
+-            message.push_str(&format!(
+-                " The default mode (\"{}\") is removed as well, so the preset's own starting mode applies.",
+-                default_mode
++            message.push_str(&trf(
++                " The default mode (\"{a0}\") is removed as well, so the preset's own starting mode applies.",
++                &[("a0", default_mode.as_str())],
+             ));
+         }
+-        self.dialog = ConfirmDialog::new("Switch to a preset?", message)
++        self.dialog = ConfirmDialog::new(tr("Switch to a preset?"), message)
+             .buttons(vec![
+-                "Save mine, then switch",
+-                "Switch without saving",
+-                "Cancel",
++                tr("Save mine, then switch"),
++                tr("Switch without saving"),
++                tr("Cancel"),
+             ])
+             .width(66)
+             .opened();
+@@ -865,7 +882,7 @@ impl KeysScreen {
+     }
+     fn example_line(&self, keys: &str, text: &str, width: usize) -> Text {
+         let keys = self.with_leader_values(keys);
+-        let text = self.with_leader_values(text);
++        let text = self.with_leader_values(example_text(text));
+         let prefix = "";
+         let line = format!("{}{} {}", prefix, keys, text);
+         let keys_start = prefix.chars().count();
+@@ -944,21 +961,22 @@ impl KeysScreen {
+         if self.step_of_setup {
+             lines.push((
+                 row,
+-                Text::from(fit("Please Choose a Keybinding Preset")).color_all(2),
++                Text::from(fit(tr("Please Choose a Keybinding Preset"))).color_all(2),
+             ));
+             row += 2;
+         } else if self.is_setup_wizard {
+             lines.push((
+                 row,
+-                Text::from(fit(
++                Text::from(fit(tr(
+                     "Hi there! How would you like your keybindings to work?",
+-                ))
++                )))
+                 .color_all(2),
+             ));
+             row += 1;
+             lines.push((
+                 row,
+-                Text::from(fit("You can change this later in the settings screen.")).dim_all(),
++                Text::from(fit(tr("You can change this later in the settings screen.")))
++                    .dim_all(),
+             ));
+             row += 2;
+         }
+@@ -966,7 +984,7 @@ impl KeysScreen {
+             rows.push((KeysField::Preset, row));
+             rows.push((KeysField::SaveAsPreset, row));
+             row += 2;
+-            let prefix = "Using custom keybinds block from";
++            let prefix = tr("Using custom keybinds block from");
+             match self.config_file_path.clone() {
+                 Some(path) => {
+                     let prefix_lines = wrap_words(prefix, width);
+@@ -1000,9 +1018,9 @@ impl KeysScreen {
+             if self.selection.set_on_command_line {
+                 lines.push((
+                     row + 1,
+-                    Text::from(fit(
++                    Text::from(fit(tr(
+                         "Given on the command line for this session; choosing here replaces it",
+-                    ))
++                    )))
+                     .dim_all(),
+                 ));
+                 row += 1;
+@@ -1018,7 +1036,7 @@ impl KeysScreen {
+                     .description
+                     .as_ref()
+                     .map(|description| self.with_leader_values(description))
+-                    .unwrap_or_else(|| PRESET_EXPLANATION.to_owned());
++                    .unwrap_or_else(|| preset_explanation().to_owned());
+                 if self.is_setup_wizard {
+                     lines.push((row, Text::from(fit(&description)).unbold_all().dim_all()));
+                     row += 1;
+@@ -1046,9 +1064,9 @@ impl KeysScreen {
+             if !has_leaders && !is_file_preset {
+                 lines.push((
+                     row,
+-                    Text::from(fit(
++                    Text::from(fit(tr(
+                         "This preset has fixed keys; it has no leader keys to set.",
+-                    ))
++                    )))
+                     .dim_all(),
+                 ));
+                 row += 1;
+@@ -1062,9 +1080,9 @@ impl KeysScreen {
+         if self.selection.set_by_layout {
+             lines.push((
+                 row,
+-                Text::from(fit(
++                Text::from(fit(tr(
+                     "The current layout chooses its own preset; it replaces this choice while it is loaded.",
+-                ))
++                )))
+                 .dim_all(),
+             ));
+             row += 1;
+@@ -1080,15 +1098,19 @@ impl KeysScreen {
+         if let Some(broken) = self.preset_errors.first() {
+             let more = self.preset_errors.len() - 1;
+             let suffix = if more > 0 {
+-                format!(" (and {} more)", more)
++                trf(" (and {a0} more)", &[("a0", more.to_string().as_str())])
+             } else {
+                 String::new()
+             };
+             lines.push((
+                 row,
+-                Text::from(fit(&format!(
+-                    "Preset {} failed to load: {}{}",
+-                    broken.name, broken.error, suffix
++                Text::from(fit(&trf(
++                    "Preset {a0} failed to load: {a1}{a2}",
++                    &[
++                        ("a0", broken.name.as_str()),
++                        ("a1", broken.error.as_str()),
++                        ("a2", suffix.as_str()),
++                    ],
+                 )))
+                 .color_all(3),
+             ));
+diff --git a/default-plugins/configuration/src/list_editor.rs b/default-plugins/configuration/src/list_editor.rs
+index b58e278..0dbeacd 100644
+--- a/default-plugins/configuration/src/list_editor.rs
++++ b/default-plugins/configuration/src/list_editor.rs
+@@ -314,14 +314,14 @@ impl EntryForm {
+                         group.add(
+                             FormKey::PairKey(index, pair_index),
+                             TextInput::new(key.clone())
+-                                .label("  key")
++                                .label(tr("  key"))
+                                 .label_width(label_width)
+-                                .placeholder("name"),
++                                .placeholder(tr("name")),
+                         );
+                         group.add(
+                             FormKey::PairValue(index, pair_index),
+                             TextInput::new(value.clone())
+-                                .label("  value")
++                                .label(tr("  value"))
+                                 .label_width(label_width),
+                         );
+                     }
+@@ -332,7 +332,7 @@ impl EntryForm {
+                 },
+                 (FieldKind::Actions, Some(FieldValue::Actions(actions))) => {
+                     let summary = if actions.is_empty() {
+-                        "(none)".to_owned()
++                        tr("(none)").to_owned()
+                     } else {
+                         actions_summary(actions)
+                     };
+@@ -348,8 +348,8 @@ impl EntryForm {
+         group.add(FormKey::Cancel, Button::new(tr("Cancel")));
+         for button in &self.extra_buttons {
+             let label = match button {
+-                FormKey::Delete => "Delete",
+-                _ => "Revert",
++                FormKey::Delete => tr("Delete"),
++                _ => tr("Revert"),
+             };
+             group.add(*button, Button::new(label));
+         }
+@@ -390,7 +390,7 @@ impl EntryForm {
+                         group.add(
+                             FormKey::PairKey(index, pair_index),
+                             TextInput::new(key.clone())
+-                                .placeholder("name")
++                                .placeholder(tr("name"))
+                                 .accent_brackets(),
+                         );
+                         group.add(
+@@ -414,7 +414,7 @@ impl EntryForm {
+                 if !keep {
+                     let actions = self.values[index].actions();
+                     let mut picker =
+-                        ActionPicker::new("Actions", actions, self.base_mode, self.for_menu);
++                        ActionPicker::new(tr("Actions"), actions, self.base_mode, self.for_menu);
+                     picker.show_list();
+                     self.picker = Some((index, picker));
+                 }
+@@ -1125,9 +1125,9 @@ impl<K: EntryKind> ListEditor<K> {
+         self
+     }
+     fn form_title(&self, verb: &str) -> String {
+-        if self.dialog_form {
+-            let noun: String = self
+-                .kind
++        // `noun` is already translated; capitalising is a no-op for CJK
++        let noun: String = if self.dialog_form {
++            self.kind
+                 .noun()
+                 .split(' ')
+                 .map(|word| {
+@@ -1138,10 +1138,14 @@ impl<K: EntryKind> ListEditor<K> {
+                     }
+                 })
+                 .collect::<Vec<String>>()
+-                .join(" ");
+-            format!("{} {}", verb, noun)
++                .join(" ")
+         } else {
+-            format!("{} {}", verb, self.kind.noun())
++            self.kind.noun().to_owned()
++        };
++        match verb {
++            "Add" => trf("Add {a0}", &[("a0", noun.as_str())]),
++            "New" => trf("New {a0}", &[("a0", noun.as_str())]),
++            _ => trf("Edit {a0}", &[("a0", noun.as_str())]),
+         }
+     }
+     fn finish_form(&self, form: EntryForm) -> EntryForm {
+@@ -1231,7 +1235,7 @@ impl<K: EntryKind> ListEditor<K> {
+         }
+     }
+     pub fn open_add(&mut self, after: Option<usize>) {
+-        let verb = if self.dialog_form { "Add" } else { "New" };
++        let verb = if self.dialog_form { "Add" } else { "New" }; // form_title key
+         let mut form = EntryForm::new(
+             self.form_title(verb),
+             None,
+@@ -1861,7 +1865,9 @@ impl SectionedList {
+             notice: None,
+             focused: false,
+             styled: None,
+-            search: TextInput::empty().placeholder("/ to search").search_mode(),
++            search: TextInput::empty()
++                .placeholder(tr("/ to search"))
++                .search_mode(),
+             filter: Dropdown::new(
+                 Text::from(tr("Menu")).color_all(0),
+                 vec![ALL_SECTIONS.to_owned()],
+diff --git a/default-plugins/configuration/src/mousebindings_screen.rs b/default-plugins/configuration/src/mousebindings_screen.rs
+index 83e8366..4073a0c 100644
+--- a/default-plugins/configuration/src/mousebindings_screen.rs
++++ b/default-plugins/configuration/src/mousebindings_screen.rs
+@@ -30,31 +30,29 @@ const CATEGORY_ORDER: [&str; 7] = [
+     VARIES,
+ ];
+ 
+-const TEXTS: ListTexts = ListTexts {
+-    title: "Mouse bindings",
+-    search_placeholder: "/ to search mouse bindings and actions",
+-    search_hint: "search mouse bindings and actions",
+-    items_hint: "bindings",
+-    plural: "bindings",
+-    no_matches: "No matching mouse bindings",
+-    empty: "No mouse bindings · a: add one",
+-    categories: &CATEGORY_ORDER,
+-    all_modes_option: true,
+-};
++/// Display texts are translated here; `categories` stays English because the
++/// literals double as grouping identifiers (they are translated at display
++/// time via `heading_label`).
++fn texts() -> ListTexts {
++    ListTexts {
++        title: tr("Mouse bindings"),
++        search_placeholder: tr("/ to search mouse bindings and actions"),
++        search_hint: tr("search mouse bindings and actions"),
++        items_hint: tr("bindings"),
++        plural: tr("bindings"),
++        no_matches: tr("No matching mouse bindings"),
++        empty: tr("No mouse bindings · a: add one"),
++        categories: &CATEGORY_ORDER,
++        all_modes_option: true,
++    }
++}
+ 
+ const LABEL_WIDTH: usize = 28;
+ const FIELD_WIDTH: usize = 18;
+ const FORM_DIALOG_MIN_WIDTH: usize = 50;
+ const FORM_DIALOG_WIDE_WIDTH: usize = 84;
+ const FORM_DIALOG_TALL_HEIGHT: usize = 24;
+-const CLICK_LABELS: [&str; 3] = ["Single", "Double", "Triple"];
+-const TARGETS: [(MouseTarget, &str); 3] = [
+-    (MouseTarget::Any, "Anywhere"),
+-    (MouseTarget::Content, "Pane content"),
+-    (MouseTarget::Frame, "Pane frame"),
+-];
+-const APP_FIRST_LABEL: &str = "Let the app have it first";
+-const SHIFT_NOTE: &str = "Many terminals take Shift-click for themselves";
++const TARGETS: [MouseTarget; 3] = [MouseTarget::Any, MouseTarget::Content, MouseTarget::Frame];
+ 
+ fn action_parts(action: &str) -> Option<(String, Vec<String>)> {
+     let text = action.trim();
+@@ -446,11 +444,11 @@ impl ListEntry for MouseRow {
+     }
+     fn columns(&self) -> Vec<String> {
+         let actions = if self.varies() {
+-            VARIES_TEXT.to_owned()
++            tr("varies by mode").to_owned()
+         } else {
+             match self.bound_actions() {
+                 Some(actions) => actions_summary(actions),
+-                None => "(unbound)".to_owned(),
++                None => tr("(unbound)").to_owned(),
+             }
+         };
+         vec![self.label(), actions]
+@@ -469,7 +467,9 @@ impl ListEntry for MouseRow {
+                 summaries.push(summary);
+             }
+         }
++        // keep both the English text and its translation searchable
+         std::iter::once(VARIES_TEXT.to_owned())
++            .chain(std::iter::once(tr("varies by mode").to_owned()))
+             .chain(summaries)
+             .collect::<Vec<_>>()
+             .join(" ")
+@@ -623,37 +623,40 @@ impl MouseForm {
+                         .unwrap_or(0);
+                     fields.add(
+                         key,
+-                        Dropdown::new("Button", options)
++                        Dropdown::new(tr("Button"), options)
+                             .selected(selected)
+                             .label_width(LABEL_WIDTH),
+                     );
+                 },
+                 Field::Clicks => fields.add(
+                     key,
+-                    Dropdown::new("Clicks", CLICK_LABELS.to_vec())
+-                        .selected(self.clicks.saturating_sub(1) as usize)
+-                        .label_width(LABEL_WIDTH),
++                    Dropdown::new(
++                        tr("Clicks"),
++                        vec![tr("Single"), tr("Double"), tr("Triple")],
++                    )
++                    .selected(self.clicks.saturating_sub(1) as usize)
++                    .label_width(LABEL_WIDTH),
+                 ),
+                 Field::Ctrl => {
+-                    fields.add(key, Toggle::new("Ctrl", self.ctrl).label_width(LABEL_WIDTH))
++                    fields.add(key, Toggle::new(tr("Ctrl"), self.ctrl).label_width(LABEL_WIDTH))
+                 },
+                 Field::Alt => {
+-                    fields.add(key, Toggle::new("Alt", self.alt).label_width(LABEL_WIDTH))
++                    fields.add(key, Toggle::new(tr("Alt"), self.alt).label_width(LABEL_WIDTH))
+                 },
+                 Field::Shift => fields.add(
+                     key,
+-                    Toggle::new("Shift", self.shift).label_width(LABEL_WIDTH),
++                    Toggle::new(tr("Shift"), self.shift).label_width(LABEL_WIDTH),
+                 ),
+                 Field::Target => {
+                     let selected = TARGETS
+                         .iter()
+-                        .position(|(target, _)| *target == self.target)
++                        .position(|target| *target == self.target)
+                         .unwrap_or(0);
+                     fields.add(
+                         key,
+                         Dropdown::new(
+-                            "Where",
+-                            TARGETS.iter().map(|(_, label)| *label).collect::<Vec<_>>(),
++                            tr("Where"),
++                            vec![tr("Anywhere"), tr("Pane content"), tr("Pane frame")],
+                         )
+                         .selected(selected)
+                         .label_width(LABEL_WIDTH),
+@@ -661,7 +664,8 @@ impl MouseForm {
+                 },
+                 Field::AppFirst => fields.add(
+                     key,
+-                    Toggle::new(APP_FIRST_LABEL, self.app_first).label_width(LABEL_WIDTH),
++                    Toggle::new(tr("Let the app have it first"), self.app_first)
++                        .label_width(LABEL_WIDTH),
+                 ),
+             }
+         }
+@@ -688,7 +692,7 @@ impl MouseForm {
+             (Field::Alt, UiValue::Bool(on)) => self.alt = on,
+             (Field::Shift, UiValue::Bool(on)) => self.shift = on,
+             (Field::Target, UiValue::Choice { index, .. }) => {
+-                if let Some((target, _)) = TARGETS.get(index) {
++                if let Some(target) = TARGETS.get(index) {
+                     self.target = *target;
+                 }
+             },
+@@ -750,7 +754,7 @@ pub struct MousebindingsScreen {
+ impl Default for MousebindingsScreen {
+     fn default() -> Self {
+         MousebindingsScreen {
+-            list: BindingsList::new(TEXTS),
++            list: BindingsList::new(texts()),
+             form: None,
+             dialog: ConfirmDialog::new("", ""),
+             dialog_purpose: None,
+@@ -784,9 +788,9 @@ impl MousebindingsScreen {
+             return;
+         };
+         if row.source == KeybindingSource::Layout {
+-            self.notice = Some(format!(
+-                "{} comes from the layout and cannot be changed here",
+-                row.trigger
++            self.notice = Some(trf(
++                "{a0} comes from the layout and cannot be changed here",
++                &[("a0", row.trigger.to_string().as_str())],
+             ));
+             return;
+         }
+@@ -808,7 +812,7 @@ impl MousebindingsScreen {
+     }
+     fn open_dialog(&mut self, title: &str, message: String, purpose: DialogPurpose) {
+         self.dialog = ConfirmDialog::new(title, message)
+-            .buttons(vec!["Replace", "Cancel"])
++            .buttons(vec![tr("Replace"), tr("Cancel")])
+             .width(64)
+             .opened();
+         self.dialog_purpose = Some(purpose);
+@@ -854,14 +858,16 @@ impl MousebindingsScreen {
+         if let Some(existing) =
+             same_trigger_binding(self.list.entries(), mode, &trigger, ignore.as_ref())
+         {
+-            let message = format!(
+-                "{} is already bound in {} to {}. Replace it?",
+-                trigger,
+-                existing.scope(),
+-                truncate(&existing.columns()[1], 40)
++            let message = trf(
++                "{a0} is already bound in {a1} to {a2}. Replace it?",
++                &[
++                    ("a0", trigger.to_string().as_str()),
++                    ("a1", existing.scope().as_str()),
++                    ("a2", truncate(&existing.columns()[1], 40).as_str()),
++                ],
+             );
+             self.open_dialog(
+-                "Trigger already bound",
++                tr("Trigger already bound"),
+                 message,
+                 DialogPurpose::Replace(actions),
+             );
+@@ -884,7 +890,13 @@ impl MousebindingsScreen {
+         ) {
+             Ok(effects) => {
+                 self.effects.extend(effects);
+-                self.notice = Some(format!("Bound {} in {}", trigger, scope_text(form.mode)));
++                self.notice = Some(trf(
++                    "Bound {a0} in {a1}",
++                    &[
++                        ("a0", trigger.to_string().as_str()),
++                        ("a1", scope_text(form.mode).as_str()),
++                    ],
++                ));
+             },
+             Err(error) => {
+                 self.notice = Some(error.clone());
+@@ -1076,7 +1088,7 @@ impl MousebindingsScreen {
+             row += 1;
+             if key == Field::Shift {
+                 print_dim(
+-                    SHIFT_NOTE,
++                    tr("Many terminals take Shift-click for themselves"),
+                     x + LABEL_WIDTH,
+                     row,
+                     width.saturating_sub(LABEL_WIDTH),
+diff --git a/default-plugins/configuration/src/page.rs b/default-plugins/configuration/src/page.rs
+index edb14cb..c74be6d 100644
+--- a/default-plugins/configuration/src/page.rs
++++ b/default-plugins/configuration/src/page.rs
+@@ -22,10 +22,13 @@ pub fn confirm_removals() -> bool {
+ pub const DONT_ASK_AGAIN: &str = "dont_ask_again";
+ 
+ pub fn removal_prompt(question: impl Into<StyledText>) -> PromptRequest {
+-    PromptRequest::form(vec![FormField::toggle(DONT_ASK_AGAIN, "Don't ask again")])
+-        .title("Confirm")
+-        .message(question)
+-        .buttons("Delete", "Cancel")
++    PromptRequest::form(vec![FormField::toggle(
++        DONT_ASK_AGAIN,
++        tr("Don't ask again"),
++    )])
++    .title(tr("Confirm"))
++    .message(question)
++    .buttons(tr("Delete"), tr("Cancel"))
+ }
+ 
+ pub fn removal_confirmed(result: &PromptResult) -> bool {
+@@ -262,6 +265,9 @@ pub fn mode_label(value: &str) -> Option<&'static str> {
+         .iter()
+         .copied()
+         .find(|label| label.eq_ignore_ascii_case(value))
++        // display-only: every producer/consumer of mode labels goes through
++        // `mode_label`/`mode_choice_label`, so translating here stays consistent
++        .map(|label| tr(label))
+ }
+ 
+ pub fn action_display_text(text: &str) -> String {
+@@ -503,10 +509,11 @@ impl ColumnLayout {
+         let mut rendered = Text::from(&line);
+         if marker_start < width {
+             let marker_end = |label: &str| (marker_start + label.chars().count()).min(width);
++            // the color prefix ends where the translated prefix ends
+             if marker.starts_with('●') {
+-                rendered = rendered.color_range(1, marker_start..marker_end("● unsaved"));
++                rendered = rendered.color_range(1, marker_start..marker_end(tr("● unsaved")));
+             } else if marker.starts_with('○') {
+-                rendered = rendered.dim_range(marker_start..marker_end("○ default"));
++                rendered = rendered.dim_range(marker_start..marker_end(tr("○ default")));
+             }
+         }
+         for (column, color, range) in styles {
+diff --git a/default-plugins/configuration/src/settings.rs b/default-plugins/configuration/src/settings.rs
+index e52f767..a0fa194 100644
+--- a/default-plugins/configuration/src/settings.rs
++++ b/default-plugins/configuration/src/settings.rs
+@@ -47,25 +47,47 @@ pub const SUB_PAGES: [Category; 6] = [
+     Category::PluginsAndEnvironment,
+ ];
+ 
+-pub const ZELLIJ_TERMINAL_NOTE: &str =
+-    "These settings only apply when Zellij runs in its own terminal app (zellij terminal).";
+-
+ impl Category {
+-    pub fn title(&self) -> &'static str {
++    /// English title literals. These double as identifiers (page slugs,
++    /// ordering, comparisons), so they are never translated; use `title()`
++    /// for display.
++    pub fn title_en(&self) -> &'static str {
+         match self {
+             Category::General => "General",
+             Category::Appearance => "Appearance",
+             Category::Keyboard => "Keyboard",
+             Category::Mouse => "Mouse",
+-            Category::Clipboard => tr("Clipboard and selection"),
+-            Category::PanesAndLayouts => tr("Panes and layouts"),
++            Category::Clipboard => "Clipboard and selection",
++            Category::PanesAndLayouts => "Panes and layouts",
+             Category::Attention => "Attention",
+             Category::Notifications => "Notifications",
+             Category::Sessions => "Sessions",
+-            Category::ZellijTerminal => tr("Zellij terminal"),
++            Category::ZellijTerminal => "Zellij terminal",
+             Category::Web => "Web",
+             Category::Advanced => "Advanced",
+             Category::Themes => "Themes",
++            Category::Borders => "Pane borders",
++            Category::Keys => "Key bindings",
++            Category::MouseBindings => "Mouse bindings",
++            Category::ContextMenu => "Right-click menu",
++            Category::PluginsAndEnvironment => "Plugins and environment",
++        }
++    }
++    pub fn title(&self) -> &'static str {
++        match self {
++            Category::General => tr("General"),
++            Category::Appearance => tr("Appearance"),
++            Category::Keyboard => tr("Keyboard"),
++            Category::Mouse => tr("Mouse"),
++            Category::Clipboard => tr("Clipboard and selection"),
++            Category::PanesAndLayouts => tr("Panes and layouts"),
++            Category::Attention => tr("Attention"),
++            Category::Notifications => tr("Notifications"),
++            Category::Sessions => tr("Sessions"),
++            Category::ZellijTerminal => tr("Zellij terminal"),
++            Category::Web => tr("Web"),
++            Category::Advanced => tr("Advanced"),
++            Category::Themes => tr("Themes"),
+             Category::Borders => tr("Pane borders"),
+             Category::Keys => tr("Key bindings"),
+             Category::MouseBindings => tr("Mouse bindings"),
+@@ -74,7 +96,7 @@ impl Category {
+         }
+     }
+     pub fn slug(&self) -> String {
+-        self.title()
++        self.title_en()
+             .chars()
+             .map(|c| {
+                 if c.is_ascii_alphanumeric() {
+@@ -138,13 +160,16 @@ impl Category {
+             _ => None,
+         }
+     }
++    /// English section the sub-page link is grouped under. Like `title_en`,
++    /// this is an identifier used for ordering (`section_index`) and heading
++    /// comparisons; it is translated at display time (see `heading_label`).
+     pub fn link_section(&self) -> &'static str {
+         match self {
+             Category::Themes => "Theme",
+-            Category::Borders => tr("Pane frames"),
+-            Category::Keys => tr("Key bindings"),
+-            Category::MouseBindings => tr("Mouse bindings"),
+-            Category::ContextMenu => tr("Right-click menu"),
++            Category::Borders => "Pane frames",
++            Category::Keys => "Key bindings",
++            Category::MouseBindings => "Mouse bindings",
++            Category::ContextMenu => "Right-click menu",
+             Category::PluginsAndEnvironment => "Plugins",
+             _ => "",
+         }
+@@ -1656,6 +1681,90 @@ pub fn section(key: SettingKey) -> &'static str {
+     placement(key).1
+ }
+ 
++/// Translate a stored English heading/label literal for display.
++///
++/// `Row::Heading` values, binding-list group headings and similar labels are
++/// stored as English literals because they double as identifiers (section
++/// ordering via `section_index`, attention-lock comparisons, entry
++/// grouping). This maps each known literal to its translated text at display
++/// time; unknown literals are returned unchanged (e.g. dynamic names).
++/// The literal `tr` calls also make every key discoverable by
++/// `tools/zhcn.py report`.
++pub fn heading_label(name: &str) -> &str {
++    match name {
++        "Startup" => tr("Startup"),
++        "Quitting" => tr("Quitting"),
++        "Starting points" => tr("Starting points"),
++        "Nested sessions" => tr("Nested sessions"),
++        "Theme" => tr("Theme"),
++        "Interface" => tr("Interface"),
++        "Pane frames" => tr("Pane frames"),
++        "Bars" => tr("Bars"),
++        "Text" => tr("Text"),
++        "Tiled pane borders" => tr("Tiled pane borders"),
++        "Floating pane borders" => tr("Floating pane borders"),
++        "Key bindings" => tr("Key bindings"),
++        "Input" => tr("Input"),
++        "Mouse" => tr("Mouse"),
++        "Right-click menu" => tr("Right-click menu"),
++        "Mouse bindings" => tr("Mouse bindings"),
++        "Clipboard" => tr("Clipboard"),
++        "Selection" => tr("Selection"),
++        "Layouts" => tr("Layouts"),
++        "Scrollback" => tr("Scrollback"),
++        "Mirrors" => tr("Mirrors"),
++        "Attention" => tr("Attention"),
++        "Inside Zellij" => tr("Inside Zellij"),
++        "Outside Zellij" => tr("Outside Zellij"),
++        "Timing" => tr("Timing"),
++        "Delivery" => tr("Delivery"),
++        "Desktop pop-ups" => tr("Desktop pop-ups"),
++        "Tray badge" => tr("Tray badge"),
++        "Tray badge colours" => tr("Tray badge colours"),
++        "Session name" => tr("Session name"),
++        "Resurrection" => tr("Resurrection"),
++        "Behaviour" => tr("Behaviour"),
++        "Font" => tr("Font"),
++        "Cursor" => tr("Cursor"),
++        "Window" => tr("Window"),
++        "Padding" => tr("Padding"),
++        "Spacing" => tr("Spacing"),
++        "Scrolling" => tr("Scrolling"),
++        "Window behaviour" => tr("Window behaviour"),
++        "Shortcuts" => tr("Shortcuts"),
++        "Text and cursor" => tr("Text and cursor"),
++        "Terminal colors" => tr("Terminal colors"),
++        "Server" => tr("Server"),
++        "Browser client" => tr("Browser client"),
++        "Plugins" => tr("Plugins"),
++        "Folders" => tr("Folders"),
++        "Terminal support" => tr("Terminal support"),
++        "Security" => tr("Security"),
++        "Pages" => tr("Pages"),
++        // binding-list group headings and list titles
++        "Switch Modes" => tr("Switch Modes"),
++        "Focus" => tr("Focus"),
++        "Panes" => tr("Panes"),
++        "Move" => tr("Move"),
++        "Resize" => tr("Resize"),
++        "Tabs" => tr("Tabs"),
++        "Scroll" => tr("Scroll"),
++        "Search" => tr("Search"),
++        "Session and plugins" => tr("Session and plugins"),
++        "Other" => tr("Other"),
++        "Clicks" => tr("Clicks"),
++        "Double and triple clicks" => tr("Double and triple clicks"),
++        "Frame" => tr("Frame"),
++        "Passed to app / Ignored" => tr("Passed to app / Ignored"),
++        "Other actions" => tr("Other actions"),
++        "Varies by mode" => tr("Varies by mode"),
++        "Keybindings" => tr("Keybindings"),
++        "All" => tr("All"),
++        "All modes" => tr("All modes"),
++        other => other,
++    }
++}
++
+ pub fn section_index(name: &str) -> usize {
+     SECTION_ORDER
+         .iter()
+@@ -1778,8 +1887,17 @@ pub fn page_matches(page: Category, query: &str) -> bool {
+     if query.chars().count() < 2 {
+         return false;
+     }
+-    let words = format!("{} {}", page.title(), page.search_words()).to_lowercase();
+-    words.contains(&query) || fuzzy_match_indices(&query, &page.title().to_lowercase()).is_some()
++    // both the translated title and the English literal are searchable
++    let words = format!(
++        "{} {} {}",
++        page.title(),
++        page.title_en(),
++        page.search_words()
++    )
++    .to_lowercase();
++    words.contains(&query)
++        || fuzzy_match_indices(&query, &page.title().to_lowercase()).is_some()
++        || fuzzy_match_indices(&query, &page.title_en().to_lowercase()).is_some()
+ }
+ 
+ fn readable(value: &str) -> String {
+@@ -1968,6 +2086,27 @@ mod tests {
+         assert_eq!(Category::from_slug("nonsense"), None);
+     }
+ 
++    #[test]
++    fn slugs_are_derived_from_the_english_titles() {
++        // the slug is an identifier (deep links via `page=<slug>`): it must be
++        // built from `title_en`, never from the translated display title, so
++        // `zellij action launch-plugin zellij:configuration -c page=<slug>`
++        // resolves under every language
++        assert_eq!(Category::ZellijTerminal.slug(), "zellij_terminal");
++        assert_eq!(Category::ContextMenu.slug(), "right_click_menu");
++        assert_eq!(Category::PluginsAndEnvironment.slug(), "plugins_and_environment");
++        for category in CATEGORIES.iter().chain(SUB_PAGES.iter()) {
++            let slug = category.slug();
++            assert!(
++                slug.chars().all(|c| c.is_ascii_lowercase() || c == '_'),
++                "slug of {:?} must be lowercase ascii: {}",
++                category,
++                slug
++            );
++            assert_eq!(Category::from_slug(&slug), Some(*category));
++        }
++    }
++
+     #[test]
+     fn attention_features_comes_first_and_everything_else_on_both_pages_depends_on_it() {
+         let attention = settings_in(Category::Attention);
+diff --git a/default-plugins/configuration/src/settings_screen.rs b/default-plugins/configuration/src/settings_screen.rs
+index 86a3de7..988399c 100644
+--- a/default-plugins/configuration/src/settings_screen.rs
++++ b/default-plugins/configuration/src/settings_screen.rs
+@@ -13,10 +13,10 @@ use crate::page::{
+     changed_by, note_group, note_overlay, outside_overlays, run_effects, Page, PageResponse,
+ };
+ use crate::settings::{
+-    check_text, choice_label, danger_warning, describe, inherits_from, kdl_for, needs_attention,
+-    option_value, page_matches, parse_hex_colour, placement, search_settings, section, settings_in,
+-    value_for_label, Category, Scope, SettingInfo, SettingKind, TextCheck, CATEGORIES,
+-    MISSING_SUFFIX, SUB_PAGES, UNSET_CHOICE, ZELLIJ_TERMINAL_NOTE,
++    check_text, choice_label, danger_warning, describe, heading_label, inherits_from, kdl_for,
++    needs_attention, option_value, page_matches, parse_hex_colour, placement, search_settings,
++    section, settings_in, value_for_label, Category, Scope, SettingInfo, SettingKind, TextCheck,
++    CATEGORIES, MISSING_SUFFIX, SUB_PAGES, UNSET_CHOICE,
+ };
+ use crate::theme_preview::{PreviewAction, ThemePreview, PREVIEWED_THEME_SETTINGS};
+ use crate::themes_screen::ThemesScreen;
+@@ -37,8 +37,6 @@ const FULL_SCREEN_WIDTH: usize = 140;
+ const KEYS_SCREEN_ROWS: usize = 18;
+ const CLOSE_NOTICE_SECONDS: f64 = 1.5;
+ const DEFAULT_THEME: &str = "default";
+-const FILE_PREFIX: &str = "File: ";
+-const WINDOW_TITLE: &str = "Settings";
+ const KEYBINDINGS_MIN_ROWS: usize = 8;
+ const COLOUR_SWATCH_WIDTH: usize = 4;
+ const PAGE_CATEGORIES: [Category; 4] = [
+@@ -50,7 +48,6 @@ const PAGE_CATEGORIES: [Category; 4] = [
+ const HOVER_HELP_SECONDS: f64 = 1.0;
+ const HELP_MAX_WIDTH: usize = 72;
+ const DANGER_MARKER: &str = "⚠ dangerous";
+-const THEME_NOTE: &str = "  A dark or light terminal theme is set and is used instead of this one";
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ enum Focus {
+@@ -91,8 +88,6 @@ const OVERWRITE_CHOICE: &str = "overwrite";
+ const RELOAD_CHOICE: &str = "reload";
+ const CANCEL_CHOICE: &str = "cancel";
+ 
+-const RELOADED_FROM_OUTSIDE: &str =
+-    "The config file was changed outside the settings and has been reloaded.";
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ struct HelpView {
+@@ -167,7 +162,7 @@ pub struct SettingsScreen {
+ 
+ impl Default for SettingsScreen {
+     fn default() -> Self {
+-        let titles: Vec<&str> = CATEGORIES.iter().map(|c| tr(c.title())).collect();
++        let titles: Vec<&str> = CATEGORIES.iter().map(|c| c.title()).collect();
+         SettingsScreen {
+             snapshot: ConfigSnapshot::default(),
+             menu: SideMenu::new(titles).focused(),
+@@ -177,7 +172,7 @@ impl Default for SettingsScreen {
+             row_offsets: BTreeMap::new(),
+             scroll: ScrollView::new(0),
+             search: TextInput::empty()
+-                .placeholder("search all settings")
++                .placeholder(tr("search all settings"))
+                 .search_mode(),
+             search_active: false,
+             pending_prompts: vec![],
+@@ -203,7 +198,7 @@ impl Default for SettingsScreen {
+             last_size: (0, 0),
+             editing: None,
+             file_link_area: None,
+-            window_title: WINDOW_TITLE.to_owned(),
++            window_title: tr("Settings").to_owned(),
+             file_link_hovered: false,
+             last_mouse: None,
+             setup_requested: false,
+@@ -271,12 +266,91 @@ fn truncate(text: &str, width: usize) -> String {
+     crate::page::truncate(text, width)
+ }
+ 
++/// Translate a hint action word for display. Hint tuples stay in English so
++/// that remaps like `("<Esc>", "close") => "back"` keep matching; each known
++/// word is mapped here at render time. The literal `tr` calls also keep the
++/// catalog keys discoverable by `tools/zhcn.py report`.
++fn hint_label(action: &str) -> &str {
++    match action {
++        "actions" => tr("actions"),
++        "add" => tr("add"),
++        "all / category" => tr("all / category"),
++        "apply" => tr("apply"),
++        "back" => tr("back"),
++        "back to settings" => tr("back to settings"),
++        "bind it" => tr("bind it"),
++        "bindings" => tr("bindings"),
++        "cancel" => tr("cancel"),
++        "capture a key" => tr("capture a key"),
++        "categories" => tr("categories"),
++        "category" => tr("category"),
++        "change" => tr("change"),
++        "change key" => tr("change key"),
++        "choose" => tr("choose"),
++        "choose category" => tr("choose category"),
++        "choose menu" => tr("choose menu"),
++        "choose mode" => tr("choose mode"),
++        "choose source" => tr("choose source"),
++        "clear" => tr("clear"),
++        "close" => tr("close"),
++        "close help" => tr("close help"),
++        "color formats" => tr("color formats"),
++        "colors" => tr("colors"),
++        "confirm" => tr("confirm"),
++        "delete" => tr("delete"),
++        "delete marked" => tr("delete marked"),
++        "do it" => tr("do it"),
++        "done" => tr("done"),
++        "edit" => tr("edit"),
++        "edit / choose" => tr("edit / choose"),
++        "end search" => tr("end search"),
++        "extend" => tr("extend"),
++        "field" => tr("field"),
++        "filter" => tr("filter"),
++        "fix all low contrast" => tr("fix all low contrast"),
++        "fix contrast" => tr("fix contrast"),
++        "help" => tr("help"),
++        "items" => tr("items"),
++        "keys" => tr("keys"),
++        "leave" => tr("leave"),
++        "mark" => tr("mark"),
++        "move" => tr("move"),
++        "move entry" => tr("move entry"),
++        "next / previous color" => tr("next / previous color"),
++        "open" => tr("open"),
++        "order" => tr("order"),
++        "past the last field: actions" => tr("past the last field: actions"),
++        "pick" => tr("pick"),
++        "press a new key" => tr("press a new key"),
++        "rename" => tr("rename"),
++        "restore defaults" => tr("restore defaults"),
++        "results" => tr("results"),
++        "revert" => tr("revert"),
++        "revert all" => tr("revert all"),
++        "revert marked" => tr("revert marked"),
++        "save" => tr("save"),
++        "search" => tr("search"),
++        "search items and actions" => tr("search items and actions"),
++        "search keys and actions" => tr("search keys and actions"),
++        "search mouse bindings and actions" => tr("search mouse bindings and actions"),
++        "search themes" => tr("search themes"),
++        "separator" => tr("separator"),
++        "settings" => tr("settings"),
++        "setup wizard" => tr("setup wizard"),
++        "stop" => tr("stop"),
++        "themes" => tr("themes"),
++        "then back to base mode" => tr("then back to base mode"),
++        "unmark" => tr("unmark"),
++        other => other,
++    }
++}
++
+ fn key_hints(prefix: &str, hints: &[(&str, &str)], cols: usize) -> Text {
+     let mut line = prefix.to_owned();
+     let mut key_ranges = vec![];
+     for (index, (key, action)) in hints.iter().enumerate() {
+         let separator = if index == 0 { "" } else { ", " };
+-        let entry = format!("{}{} - {}", separator, key, action);
++        let entry = format!("{}{} - {}", separator, key, hint_label(action));
+         if zellij_tile::graphemes::display_width(&line)
+             + zellij_tile::graphemes::display_width(&entry)
+             > cols
+@@ -570,9 +644,9 @@ impl SettingsScreen {
+                     }
+                 });
+                 if has_unsaved {
+-                    format!("{} ●", tr(category.title()))
++                    format!("{} ●", category.title())
+                 } else {
+-                    tr(category.title()).to_owned()
++                    category.title().to_owned()
+                 }
+             })
+             .collect();
+@@ -626,17 +700,19 @@ impl SettingsScreen {
+             + 2;
+         if !self.search_active {
+             if let Some(page) = self.sub_page.filter(|page| page.has_rows()) {
+-                let parent = tr(page.parent().unwrap_or(Category::General).title());
+-                self.rows.push(Row::Line(format!(
+-                    "{} › {}  (Esc goes back)",
+-                    parent,
+-                    tr(page.title())
++                let parent = page.parent().unwrap_or(Category::General).title();
++                self.rows.push(Row::Line(trf(
++                    "{a0} › {a1}  (Esc goes back)",
++                    &[
++                        ("a0", parent),
++                        ("a1", page.title()),
++                    ],
+                 )));
+             }
+             match self.category() {
+-                Category::ZellijTerminal => {
+-                    self.rows.push(Row::Line(ZELLIJ_TERMINAL_NOTE.to_owned()))
+-                },
++                Category::ZellijTerminal => self.rows.push(Row::Line(
++                    tr("These settings only apply when Zellij runs in its own terminal app (zellij terminal).").to_owned(),
++                )),
+                 Category::Advanced => {
+                     let folder = self
+                         .snapshot
+@@ -655,8 +731,11 @@ impl SettingsScreen {
+             let links = self.displayed_links();
+             let mut items: Vec<(String, Row)> = vec![];
+             for key in keys {
++                // headings stay English literals (they are identifiers for
++                // ordering and attention-lock comparisons) and are translated
++                // at display time via heading_label
+                 let heading = if self.search_active {
+-                    tr(describe(key).category.title()).to_owned()
++                    describe(key).category.title_en().to_owned()
+                 } else {
+                     section(key).to_owned()
+                 };
+@@ -690,9 +769,9 @@ impl SettingsScreen {
+                     Row::Setting(key) => self.build_element(*key).map(|element| (*key, element)),
+                     Row::Link(page) => page.link_key().map(|key| {
+                         let label = if self.search_active {
+-                            format!("{} ({})", tr(page.link_label()), tr(page.title()))
++                            format!("{} ({})", page.link_label(), page.title())
+                         } else {
+-                            tr(page.link_label()).to_owned()
++                            page.link_label().to_owned()
+                         };
+                         (key, Button::new(label).left_aligned().into())
+                     }),
+@@ -713,7 +792,7 @@ impl SettingsScreen {
+                     && self.theme_note_shown
+                     && matches!(self.rows.last(), Some(Row::Setting(_)))
+                 {
+-                    self.rows.push(Row::Line(THEME_NOTE.to_owned()));
++                    self.rows.push(Row::Line(tr("  A dark or light terminal theme is set and is used instead of this one").to_owned()));
+                 }
+             }
+         }
+@@ -1044,7 +1123,8 @@ impl SettingsScreen {
+                 Row::Setting(key) => {
+                     needs_attention(*key)
+                         && (section(*key) == heading
+-                            || (self.search_active && describe(*key).category.title() == heading))
++                            || (self.search_active
++                                && describe(*key).category.title_en() == heading))
+                 },
+                 _ => false,
+             })
+@@ -1130,7 +1210,10 @@ impl SettingsScreen {
+             FileChangeReaction::ShowReloaded => {
+                 self.refresh();
+                 self.update_theme_preview();
+-                self.notice = Some(RELOADED_FROM_OUTSIDE.to_owned());
++                self.notice = Some(
++                    tr("The config file was changed outside the settings and has been reloaded.")
++                        .to_owned(),
++                );
+             },
+         }
+     }
+@@ -1144,15 +1227,15 @@ impl SettingsScreen {
+         let request = PromptRequest::menu(vec![
+             ChoiceItem::labeled(
+                 OVERWRITE_CHOICE,
+-                "Overwrite: apply your unsaved changes to the file as it is now",
++                tr("Overwrite: apply your unsaved changes to the file as it is now"),
+             ),
+             ChoiceItem::labeled(
+                 RELOAD_CHOICE,
+-                "Reload: read the file again and keep your changes unsaved",
++                tr("Reload: read the file again and keep your changes unsaved"),
+             ),
+-            ChoiceItem::labeled(CANCEL_CHOICE, "Cancel"),
++            ChoiceItem::labeled(CANCEL_CHOICE, tr("Cancel")),
+         ])
+-        .title(format!("{} changed outside Zellij", file));
++        .title(trf("{a0} changed outside Zellij", &[("a0", file.as_str())]));
+         self.clear_all_hover();
+         self.ask(request, DialogPurpose::ChangedOutside);
+     }
+@@ -1162,15 +1245,22 @@ impl SettingsScreen {
+     }
+     fn open_revert_all_dialog(&mut self) {
+         let count = self.snapshot.unsaved_count();
+-        let message = format!(
+-            "Revert {} unsaved change{} to the values in the config file?",
+-            count,
+-            if count == 1 { "" } else { "s" }
+-        );
++        let count_string = count.to_string();
++        let message = if count == 1 {
++            trf(
++                "Revert {count} unsaved change to the values in the config file?",
++                &[("count", count_string.as_str())],
++            )
++        } else {
++            trf(
++                "Revert {count} unsaved changes to the values in the config file?",
++                &[("count", count_string.as_str())],
++            )
++        };
+         let request = PromptRequest::confirm(message)
+-            .title("Revert all?")
+-            .yes("Revert all")
+-            .no("Cancel");
++            .title(tr("Revert all?"))
++            .yes(tr("Revert all"))
++            .no(tr("Cancel"));
+         self.clear_all_hover();
+         self.ask(request, DialogPurpose::RevertAll);
+     }
+@@ -1260,11 +1350,18 @@ impl SettingsScreen {
+         if unsaved == 0 {
+             close_self();
+         } else {
+-            self.notice = Some(format!(
+-                "{} unsaved change{} stay applied to this session. Ctrl+a in settings saves them.",
+-                unsaved,
+-                if unsaved == 1 { "" } else { "s" }
+-            ));
++            let count = unsaved.to_string();
++            self.notice = Some(if unsaved == 1 {
++                trf(
++                    "{count} unsaved change stays applied to this session. Ctrl+a in settings saves them.",
++                    &[("count", count.as_str())],
++                )
++            } else {
++                trf(
++                    "{count} unsaved changes stay applied to this session. Ctrl+a in settings saves them.",
++                    &[("count", count.as_str())],
++                )
++            });
+             self.closing = true;
+             self.clear_all_hover();
+             set_timeout(CLOSE_NOTICE_SECONDS);
+@@ -1274,11 +1371,18 @@ impl SettingsScreen {
+         self.save_state = SaveState::Idle;
+         if std::mem::replace(&mut self.awaiting_reload, false) {
+             let unsaved = self.snapshot.unsaved_count();
+-            self.notice = Some(format!(
+-                "Reloaded the config file; {} unsaved change{} kept",
+-                unsaved,
+-                if unsaved == 1 { "" } else { "s" }
+-            ));
++            let count = unsaved.to_string();
++            self.notice = Some(if unsaved == 1 {
++                trf(
++                    "Reloaded the config file; {count} unsaved change kept",
++                    &[("count", count.as_str())],
++                )
++            } else {
++                trf(
++                    "Reloaded the config file; {count} unsaved changes kept",
++                    &[("count", count.as_str())],
++                )
++            });
+         }
+         if let Some(restart_settings) = self.awaiting_save.take() {
+             let path = self
+@@ -1310,12 +1414,18 @@ impl SettingsScreen {
+     }
+     pub fn changes_dropped(&mut self, dropped: Vec<SettingKey>) {
+         let names: Vec<&str> = dropped.iter().map(|key| describe(*key).name).collect();
+-        self.notice = Some(format!(
+-            "The config file changed; your unsaved change{} to {} {} replaced by the file",
+-            if names.len() == 1 { "" } else { "s" },
+-            names.join(", "),
+-            if names.len() == 1 { "was" } else { "were" }
+-        ));
++        let joined = names.join(", ");
++        self.notice = Some(if names.len() == 1 {
++            trf(
++                "The config file changed; your unsaved change to {a0} was replaced by the file",
++                &[("a0", joined.as_str())],
++            )
++        } else {
++            trf(
++                "The config file changed; your unsaved changes to {a0} were replaced by the file",
++                &[("a0", joined.as_str())],
++            )
++        });
+         self.theme_preview.file_replaced(&dropped);
+         self.refresh();
+         self.update_theme_preview();
+@@ -1460,10 +1570,10 @@ impl SettingsScreen {
+     fn help_content(&self, key: SettingKey) -> (String, Vec<HelpLine>) {
+         if let Some(page) = self.link_at(key) {
+             return (
+-                tr(page.title()).to_owned(),
+-                vec![HelpLine::Text(format!(
+-                    "Opens the {} page. Press Enter or click it to open, and Esc to come back here.",
+-                    tr(page.title()).to_lowercase()
++                page.title().to_owned(),
++                vec![HelpLine::Text(trf(
++                    "Opens the {a0} page. Press Enter or click it to open, and Esc to come back here.",
++                    &[("a0", page.title().to_lowercase().to_string().as_str())],
+                 ))],
+             );
+         }
+@@ -2558,9 +2668,9 @@ impl SettingsScreen {
+             }
+         } else {
+             self.keys_screen.render_preset_row(x, y, width);
+-            let summary = format!(
+-                "{} · ↑ at the top or click above to change",
+-                self.keys_screen.summary()
++            let summary = trf(
++                "{a0} · ↑ at the top or click above to change",
++                &[("a0", self.keys_screen.summary().as_str())],
+             );
+             print_text_with_coordinates(
+                 Text::from(truncate(&summary, width)).dim_all(),
+@@ -2698,11 +2808,14 @@ impl SettingsScreen {
+     }
+     fn render_header(&mut self, x: usize, y: usize, cols: usize) {
+         let unsaved = self.snapshot.unsaved_count();
+-        let count = format!(
+-            "{} unsaved change{}",
+-            unsaved,
+-            if unsaved == 1 { "" } else { "s" }
+-        );
++        let count = if unsaved == 1 {
++            trf("{count} unsaved change", &[("count", "1")])
++        } else {
++            trf(
++                "{count} unsaved changes",
++                &[("count", unsaved.to_string().as_str())],
++            )
++        };
+         let page_hints = if self.showing_page() {
+             self.page_ref(self.category())
+                 .and_then(|page| page.header_hints())
+@@ -2723,8 +2836,8 @@ impl SettingsScreen {
+         print_text_with_coordinates(header, x, y + 2, None, None);
+         match self.header_file() {
+             Some(path) => {
+-                print_text_with_coordinates(Text::from(FILE_PREFIX), x, y, None, None);
+-                let prefix_width = zellij_tile::graphemes::display_width(FILE_PREFIX);
++                print_text_with_coordinates(Text::from(tr("File: ")), x, y, None, None);
++                let prefix_width = zellij_tile::graphemes::display_width(tr("File: "));
+                 let link_x = x + prefix_width;
+                 let link = truncate(&path, cols.saturating_sub(prefix_width));
+                 self.file_link_area = Some(Rect::new(
+@@ -2738,7 +2851,7 @@ impl SettingsScreen {
+             None => {
+                 self.file_link_area = None;
+                 print_text_with_coordinates(
+-                    Text::from(truncate("File: none (settings cannot be saved)", cols)),
++                    Text::from(truncate(tr("File: none (settings cannot be saved)"), cols)),
+                     x,
+                     y,
+                     None,
+@@ -2772,9 +2885,9 @@ impl SettingsScreen {
+         }
+         .or_else(|| {
+             self.sub_page
+-                .map(|page| format!("{} › {}", WINDOW_TITLE, page.title()))
++                .map(|page| format!("{} › {}", tr("Settings"), page.title()))
+         })
+-        .unwrap_or_else(|| WINDOW_TITLE.to_owned());
++        .unwrap_or_else(|| tr("Settings").to_owned());
+         if title != self.window_title {
+             rename_plugin_pane(get_plugin_ids().plugin_id, &title);
+             self.window_title = title;
+@@ -2797,7 +2910,7 @@ impl SettingsScreen {
+         }
+         let key = self.elements.focused_key()?;
+         if let Some(page) = self.link_at(*key) {
+-            return Some(trf("Opens the {a0} page", &[("a0", tr(page.title()).to_lowercase().to_string().as_str()), ]));
++            return Some(trf("Opens the {a0} page", &[("a0", page.title().to_lowercase().to_string().as_str()), ]));
+         }
+         let info = describe(*key);
+         let scope = match info.scope {
+@@ -2805,13 +2918,18 @@ impl SettingsScreen {
+             Scope::Everyone => tr("applies to everyone in this session"),
+         };
+         let restart = if key.requires_restart() {
+-            ", takes effect after a restart"
++            tr(", takes effect after a restart")
+         } else {
+             ""
+         };
+-        Some(format!(
+-            "{} (default: {}; {}{})",
+-            info.description, info.default, scope, restart
++        Some(trf(
++            "{a0} (default: {a1}; {a2}{a3})",
++            &[
++                ("a0", info.description),
++                ("a1", info.default),
++                ("a2", scope),
++                ("a3", restart),
++            ],
+         ))
+     }
+     fn render_footer(&self, x: usize, bottom: usize, cols: usize) {
+@@ -2836,7 +2954,7 @@ impl SettingsScreen {
+                         other => other,
+                     })
+                     .collect();
+-                print_text_with_coordinates(key_hints("Help: ", &hints, cols), x, y, None, None);
++                print_text_with_coordinates(key_hints(tr("Help: "), &hints, cols), x, y, None, None);
+             } else {
+                 let hints = [
+                     ("<↓↑>", "category"),
+@@ -2844,7 +2962,7 @@ impl SettingsScreen {
+                     ("</>", "search"),
+                     ("<Esc>", "close"),
+                 ];
+-                print_text_with_coordinates(key_hints("Help: ", &hints, cols), x, y, None, None);
++                print_text_with_coordinates(key_hints(tr("Help: "), &hints, cols), x, y, None, None);
+             }
+             return;
+         }
+@@ -2935,7 +3053,7 @@ impl SettingsScreen {
+                 other => other,
+             })
+             .collect();
+-        print_text_with_coordinates(key_hints("Help: ", &hints, cols), x, y, None, None);
++        print_text_with_coordinates(key_hints(tr("Help: "), &hints, cols), x, y, None, None);
+     }
+     fn render_content(&mut self, x: usize, y: usize, width: usize, height: usize) {
+         let starts = self.layout_rows();
+@@ -2986,7 +3104,10 @@ impl SettingsScreen {
+                 },
+                 Row::Heading(title) => {
+                     if let Some(screen_y) = self.scroll.screen_row(start) {
+-                        let heading = Text::from(truncate(title, content_width));
++                        // `title` stays the English literal (it is also used by
++                        // `heading_is_locked` for comparisons); translate for
++                        // display only
++                        let heading = Text::from(truncate(heading_label(title), content_width));
+                         let heading = if self.heading_is_locked(title) {
+                             heading.dim_all()
+                         } else {
+@@ -3044,7 +3165,7 @@ impl SettingsScreen {
+                     } else {
+                         0
+                     };
+-                    Some(self.marker_for(*key).0.chars().count() + swatch)
++                    Some(display_width(&self.marker_for(*key).0) + swatch)
+                 },
+                 _ => None,
+             })
+@@ -3065,7 +3186,10 @@ impl SettingsScreen {
+         };
+         let (marker, unsaved, is_default) = self.marker_for(key);
+         let label_width = self.label_width();
+-        let marker_width = marker.chars().count();
++        // display width, not char count: CJK markers like "⟳ 重启" occupy more
++        // cells than chars; underestimating pushes the marker past the pane
++        // edge where it wraps onto the next row
++        let marker_width = display_width(&marker);
+         let full_width_text = self.elements.text_input(&key).is_some()
+             && !self.search_active
+             && self.category() == Category::Advanced;
+@@ -3118,10 +3242,10 @@ impl SettingsScreen {
+             };
+             let mut marker_text = Text::from(&marker);
+             if unsaved {
+-                let unsaved_len = "● unsaved".chars().count();
++                let unsaved_len = tr("● unsaved").chars().count();
+                 marker_text = marker_text.color_range(1, ..unsaved_len);
+             } else if is_default {
+-                let default_len = "○ default".chars().count();
++                let default_len = tr("○ default").chars().count();
+                 marker_text = marker_text.dim_range(..default_len);
+             }
+             if self.active_danger(key).is_some() {
+diff --git a/zellij-server/src/ui/hint_text.rs b/zellij-server/src/ui/hint_text.rs
+index 8abfdde..6a5b87c 100644
+--- a/zellij-server/src/ui/hint_text.rs
++++ b/zellij-server/src/ui/hint_text.rs
+@@ -100,7 +100,11 @@ pub fn rerun_segments(is_first_run: bool, tier: HintTier) -> Vec<HintSegment> {
+             HintSegment::plain(if is_first_run { " <" } else { "<" }),
+             HintSegment::emphasis("ENTER"),
+             HintSegment::plain(">"),
+-            HintSegment::plain(if is_first_run { " run, " } else { " re-run, " }),
++            HintSegment::plain(if is_first_run {
++                tr(" run, ")
++            } else {
++                tr(" re-run, ")
++            }),
+             HintSegment::plain("<"),
+             HintSegment::emphasis("ESC"),
+             HintSegment::plain(">"),
+@@ -114,7 +118,11 @@ pub fn rerun_segments(is_first_run: bool, tier: HintTier) -> Vec<HintSegment> {
+             HintSegment::plain("<"),
+             HintSegment::emphasis("ENTER"),
+             HintSegment::plain(">"),
+-            HintSegment::plain(if is_first_run { " run " } else { " re-run " }),
++            HintSegment::plain(if is_first_run {
++                tr(" run ")
++            } else {
++                tr(" re-run ")
++            }),
+             HintSegment::plain("<"),
+             HintSegment::emphasis("ESC"),
+             HintSegment::plain(">"),
+@@ -128,7 +136,11 @@ pub fn rerun_segments(is_first_run: bool, tier: HintTier) -> Vec<HintSegment> {
+             HintSegment::plain("<"),
+             HintSegment::emphasis("ENTER"),
+             HintSegment::plain(">"),
+-            HintSegment::plain(if is_first_run { " run" } else { " re-run" }),
++            HintSegment::plain(if is_first_run {
++                tr(" run")
++            } else {
++                tr(" re-run")
++            }),
+         ],
+     }
+ }
+diff --git a/zellij-utils/src/desktop_integration/mod.rs b/zellij-utils/src/desktop_integration/mod.rs
+index a5ebfbb..d6beab9 100644
+--- a/zellij-utils/src/desktop_integration/mod.rs
++++ b/zellij-utils/src/desktop_integration/mod.rs
+@@ -1,6 +1,7 @@
+ use serde::{Deserialize, Serialize};
+ use std::collections::BTreeSet;
+ use std::path::PathBuf;
++use zellij_i18n::tr;
+ 
+ #[cfg(windows)]
+ pub mod com;
+@@ -207,32 +208,37 @@ pub fn fingerprint_bytes(bytes: &[u8]) -> String {
+     digest.iter().map(|byte| format!("{:02x}", byte)).collect()
+ }
+ 
+-pub const WINDOW_WELCOME_EMPHASIS: [(&str, usize); 4] = [
+-    ("keeps your sessions running", 0),
+-    ("tray icon", 0),
+-    ("Desktop notifications", 0),
+-    ("Right-click", 3),
+-];
++/// Phrases highlighted inside `window_welcome_points` (phrase, color level).
++/// A function rather than a const so the phrases can be translated; each
++/// translated phrase must appear verbatim in the corresponding point.
++pub fn window_welcome_emphasis() -> [(&'static str, usize); 4] {
++    [
++        (tr("keeps your sessions running"), 0),
++        (tr("tray icon"), 0),
++        (tr("Desktop notifications"), 0),
++        (tr("Right-click"), 3),
++    ]
++}
+ 
+ pub fn window_welcome_points(only_missing: bool) -> Vec<String> {
+     let mut lines = vec![];
+     if !only_missing {
+         lines.push(
+-            "Closing this window keeps your sessions running, reopen them from the session list."
++            tr("Closing this window keeps your sessions running, reopen them from the session list.")
+                 .to_owned(),
+         );
+         lines.push(
+-            "The tray icon shows when something needs you, click it for the inbox and sessions."
++            tr("The tray icon shows when something needs you, click it for the inbox and sessions.")
+                 .to_owned(),
+         );
+         lines.push(
+-            "Desktop notifications tell you when a command finishes, fails or needs you. Choose \
+-             which in Settings → Notifications."
++            tr("Desktop notifications tell you when a command finishes, fails or needs you. Choose \
++             which in Settings → Notifications.")
+                 .to_owned(),
+         );
+         lines.push(
+-            "Right-click Zellij's icon in the app menu or taskbar for Show Inbox and Show \
+-             Sessions."
++            tr("Right-click Zellij's icon in the app menu or taskbar for Show Inbox and Show \
++             Sessions.")
+                 .to_owned(),
+         );
+     }

@@ -1,0 +1,6 @@
+/.work/
+/target/
+/dist/
+__pycache__/
+/crates/zellij-i18n/target/
+/crates/zellij-i18n/src/catalog_generated.rs

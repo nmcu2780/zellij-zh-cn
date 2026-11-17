@@ -1,0 +1,108 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 14:48:29 +0800
+Subject: [PATCH 16/19] i18n: translate configuration sidebar categories and
+ small-pane notice
+
+---
+ .../configuration/src/settings_screen.rs      | 31 ++++++++++---------
+ 1 file changed, 17 insertions(+), 14 deletions(-)
+
+diff --git a/default-plugins/configuration/src/settings_screen.rs b/default-plugins/configuration/src/settings_screen.rs
+index bfa64e9..86a3de7 100644
+--- a/default-plugins/configuration/src/settings_screen.rs
++++ b/default-plugins/configuration/src/settings_screen.rs
+@@ -167,7 +167,7 @@ pub struct SettingsScreen {
+ 
+ impl Default for SettingsScreen {
+     fn default() -> Self {
+-        let titles: Vec<&str> = CATEGORIES.iter().map(|c| c.title()).collect();
++        let titles: Vec<&str> = CATEGORIES.iter().map(|c| tr(c.title())).collect();
+         SettingsScreen {
+             snapshot: ConfigSnapshot::default(),
+             menu: SideMenu::new(titles).focused(),
+@@ -570,9 +570,9 @@ impl SettingsScreen {
+                     }
+                 });
+                 if has_unsaved {
+-                    format!("{} ●", category.title())
++                    format!("{} ●", tr(category.title()))
+                 } else {
+-                    category.title().to_owned()
++                    tr(category.title()).to_owned()
+                 }
+             })
+             .collect();
+@@ -626,11 +626,11 @@ impl SettingsScreen {
+             + 2;
+         if !self.search_active {
+             if let Some(page) = self.sub_page.filter(|page| page.has_rows()) {
+-                let parent = page.parent().unwrap_or(Category::General).title();
++                let parent = tr(page.parent().unwrap_or(Category::General).title());
+                 self.rows.push(Row::Line(format!(
+                     "{} › {}  (Esc goes back)",
+                     parent,
+-                    page.title()
++                    tr(page.title())
+                 )));
+             }
+             match self.category() {
+@@ -656,7 +656,7 @@ impl SettingsScreen {
+             let mut items: Vec<(String, Row)> = vec![];
+             for key in keys {
+                 let heading = if self.search_active {
+-                    describe(key).category.title().to_owned()
++                    tr(describe(key).category.title()).to_owned()
+                 } else {
+                     section(key).to_owned()
+                 };
+@@ -690,9 +690,9 @@ impl SettingsScreen {
+                     Row::Setting(key) => self.build_element(*key).map(|element| (*key, element)),
+                     Row::Link(page) => page.link_key().map(|key| {
+                         let label = if self.search_active {
+-                            format!("{} ({})", page.link_label(), page.title())
++                            format!("{} ({})", tr(page.link_label()), tr(page.title()))
+                         } else {
+-                            page.link_label().to_owned()
++                            tr(page.link_label()).to_owned()
+                         };
+                         (key, Button::new(label).left_aligned().into())
+                     }),
+@@ -1460,10 +1460,10 @@ impl SettingsScreen {
+     fn help_content(&self, key: SettingKey) -> (String, Vec<HelpLine>) {
+         if let Some(page) = self.link_at(key) {
+             return (
+-                page.title().to_owned(),
++                tr(page.title()).to_owned(),
+                 vec![HelpLine::Text(format!(
+                     "Opens the {} page. Press Enter or click it to open, and Esc to come back here.",
+-                    page.title().to_lowercase()
++                    tr(page.title()).to_lowercase()
+                 ))],
+             );
+         }
+@@ -2412,9 +2412,12 @@ impl SettingsScreen {
+             self.follow_focus = true;
+         }
+         if rows < MIN_ROWS || cols < MIN_COLS {
+-            let message = format!(
+-                "Pane too small for settings ({}x{} needed)",
+-                MIN_COLS, MIN_ROWS
++            let message = trf(
++                "Pane too small for settings ({a0}x{a1} needed)",
++                &[
++                    ("a0", MIN_COLS.to_string().as_str()),
++                    ("a1", MIN_ROWS.to_string().as_str()),
++                ],
+             );
+             print_text_with_coordinates(
+                 Text::from(truncate(&message, cols)).color_all(3),
+@@ -2794,7 +2797,7 @@ impl SettingsScreen {
+         }
+         let key = self.elements.focused_key()?;
+         if let Some(page) = self.link_at(*key) {
+-            return Some(trf("Opens the {a0} page", &[("a0", page.title().to_lowercase().to_string().as_str()), ]));
++            return Some(trf("Opens the {a0} page", &[("a0", tr(page.title()).to_lowercase().to_string().as_str()), ]));
+         }
+         let info = describe(*key);
+         let scope = match info.scope {

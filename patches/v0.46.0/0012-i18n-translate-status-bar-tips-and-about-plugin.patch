@@ -1,0 +1,1921 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 14:26:03 +0800
+Subject: [PATCH 12/19] i18n: translate status-bar tips and about plugin
+
+---
+ default-plugins/about/Cargo.toml              |   1 +
+ default-plugins/about/src/keybindings.rs      |  67 ++++-----
+ default-plugins/about/src/main.rs             |  30 ++--
+ default-plugins/about/src/onboarding.rs       | 105 +++++++-------
+ default-plugins/about/src/pages.rs            |  76 +++++-----
+ default-plugins/about/src/tips.rs             | 137 +++++++++---------
+ .../src/status_bar/tip/data/compact_layout.rs |  19 +--
+ .../status_bar/tip/data/edit_scrollbuffer.rs  |  19 +--
+ .../tip/data/floating_panes_mouse.rs          |  15 +-
+ .../tip/data/move_focus_hjkl_tab_switch.rs    |  19 +--
+ .../bars/src/status_bar/tip/data/move_tabs.rs |  23 +--
+ .../bars/src/status_bar/tip/data/quicknav.rs  |  27 ++--
+ .../tip/data/send_mouse_click_to_terminal.rs  |  13 +-
+ .../bars/src/status_bar/tip/data/sync_tab.rs  |  13 +-
+ .../bars/src/status_bar/tip/data/use_mouse.rs |  17 ++-
+ .../status_bar/tip/data/zellij_setup_check.rs |  15 +-
+ 16 files changed, 305 insertions(+), 291 deletions(-)
+
+diff --git a/default-plugins/about/Cargo.toml b/default-plugins/about/Cargo.toml
+index f153d58..2f78866 100644
+--- a/default-plugins/about/Cargo.toml
++++ b/default-plugins/about/Cargo.toml
+@@ -7,4 +7,5 @@ license.workspace = true
+ 
+ [dependencies]
+ zellij-tile = { path = "../../zellij-tile" }
++zellij-i18n = { workspace = true }
+ rand = { workspace = true }
+diff --git a/default-plugins/about/src/keybindings.rs b/default-plugins/about/src/keybindings.rs
+index cb4899e..0c4c7ca 100644
+--- a/default-plugins/about/src/keybindings.rs
++++ b/default-plugins/about/src/keybindings.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use std::cell::RefCell;
+ use std::collections::BTreeMap;
+ use std::rc::Rc;
+@@ -21,16 +22,16 @@ pub enum Feature {
+ impl Feature {
+     pub fn label(&self) -> &'static str {
+         match self {
+-            Feature::NestedSessions => "nested sessions",
+-            Feature::PaneFocus => "pane focus",
+-            Feature::ScrollByCommand => "scrolling by command",
+-            Feature::Inbox => "the inbox and pane status",
+-            Feature::SessionHistory => "moving between sessions",
+-            Feature::FloatingPanes => "floating panes",
+-            Feature::StackOrientation => "stack orientation",
+-            Feature::Bars => "hiding the bars",
+-            Feature::SwapLayouts => "swap layouts",
+-            Feature::SessionRename => "renaming sessions",
++            Feature::NestedSessions => tr("nested sessions"),
++            Feature::PaneFocus => tr("pane focus"),
++            Feature::ScrollByCommand => tr("scrolling by command"),
++            Feature::Inbox => tr("the inbox and pane status"),
++            Feature::SessionHistory => tr("moving between sessions"),
++            Feature::FloatingPanes => tr("floating panes"),
++            Feature::StackOrientation => tr("stack orientation"),
++            Feature::Bars => tr("hiding the bars"),
++            Feature::SwapLayouts => tr("swap layouts"),
++            Feature::SessionRename => tr("renaming sessions"),
+         }
+     }
+ }
+@@ -86,7 +87,7 @@ impl ExpectedBind {
+     }
+     pub fn mode_name(&self) -> String {
+         if self.in_base_mode {
+-            return "ANY".to_owned();
++            return tr("ANY (mode name)").to_owned();
+         }
+         format!("{:?}", self.mode).to_uppercase()
+     }
+@@ -330,7 +331,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Session,
+             KeyWithModifier::new(BareKey::Char(']')),
+             Action::FocusHostSession,
+-            "host session",
++            tr("host session"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -338,7 +339,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Session,
+             KeyWithModifier::new(BareKey::Char('[')),
+             Action::FocusGuestSession,
+-            "guest session",
++            tr("guest session"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -346,7 +347,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Session,
+             KeyWithModifier::new(BareKey::Char('f')),
+             Action::ToggleHostFullscreen,
+-            "host fullscreen",
++            tr("host fullscreen"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -354,7 +355,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Pane,
+             KeyWithModifier::new(BareKey::Char(';')),
+             Action::FocusLastPane,
+-            "last focused pane",
++            tr("last focused pane"),
+             false,
+         ),
+         ExpectedBind::new(
+@@ -362,7 +363,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Scroll,
+             KeyWithModifier::new(BareKey::Char('[')),
+             Action::ScrollToPreviousPrompt,
+-            "previous command",
++            tr("previous command"),
+             false,
+         ),
+         ExpectedBind::new(
+@@ -370,7 +371,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Scroll,
+             KeyWithModifier::new(BareKey::Char(']')),
+             Action::ScrollToNextPrompt,
+-            "next command",
++            tr("next command"),
+             false,
+         ),
+         ExpectedBind::new(
+@@ -378,7 +379,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Scroll,
+             KeyWithModifier::new(BareKey::Char('m')),
+             Action::SelectCommandAtScrollPosition,
+-            "select command",
++            tr("select command"),
+             false,
+         ),
+         ExpectedBind::new(
+@@ -386,7 +387,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Scroll,
+             KeyWithModifier::new(BareKey::Char('c')),
+             Action::CopyLastCommandOutput,
+-            "copy last output",
++            tr("copy last output"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -394,7 +395,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Session,
+             KeyWithModifier::new(BareKey::Char('i')),
+             Action::ToggleSessionCard,
+-            "inbox",
++            tr("inbox"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -402,7 +403,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Session,
+             KeyWithModifier::new(BareKey::Char('u')),
+             Action::MuteSession,
+-            "mute session",
++            tr("mute session"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -410,7 +411,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Session,
+             KeyWithModifier::new(BareKey::Char('n')),
+             Action::GoToNextAttention,
+-            "next item that needs you",
++            tr("next item that needs you"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -418,7 +419,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Pane,
+             KeyWithModifier::new(BareKey::Char('u')),
+             Action::MutePane,
+-            "mute",
++            tr("mute"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -426,7 +427,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Pane,
+             KeyWithModifier::new(BareKey::Char('g')),
+             Action::IgnorePaneOutput,
+-            "ignore output",
++            tr("ignore output"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -434,7 +435,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Pane,
+             KeyWithModifier::new(BareKey::Char('v')),
+             Action::WatchPane,
+-            "watch",
++            tr("watch"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -442,7 +443,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Tab,
+             KeyWithModifier::new(BareKey::Char('u')),
+             Action::MuteTab,
+-            "mute tab",
++            tr("mute tab"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -450,7 +451,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Session,
+             KeyWithModifier::new(BareKey::Tab),
+             Action::ToggleSession,
+-            "previous session",
++            tr("previous session"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -458,7 +459,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Session,
+             KeyWithModifier::new(BareKey::Left),
+             Action::GoToPreviousSession,
+-            "back",
++            tr("back"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -466,7 +467,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Session,
+             KeyWithModifier::new(BareKey::Right),
+             Action::GoToNextSession,
+-            "forward",
++            tr("forward"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -489,7 +490,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Pane,
+             KeyWithModifier::new(BareKey::Char('s')).with_shift_modifier(),
+             Action::ToggleStackListOrientation,
+-            "toggle stack orientation",
++            tr("toggle stack orientation"),
+             true,
+         ),
+         ExpectedBind::new(
+@@ -505,7 +506,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Tab,
+             KeyWithModifier::new(BareKey::Char(' ')),
+             Action::NextSwapLayout,
+-            "next",
++            tr("next"),
+             false,
+         )
+         .detected_by_key(),
+@@ -514,7 +515,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::Tab,
+             KeyWithModifier::new(BareKey::Char(' ')).with_shift_modifier(),
+             Action::PreviousSwapLayout,
+-            "previous",
++            tr("previous"),
+             false,
+         )
+         .detected_by_key(),
+@@ -539,7 +540,7 @@ pub fn expected_binds() -> Vec<ExpectedBind> {
+             InputMode::RenameSession,
+             KeyWithModifier::new(BareKey::Esc),
+             Action::UndoRenameSession,
+-            "undo",
++            tr("undo"),
+             false,
+         )
+         .with_bound_actions(vec![
+diff --git a/default-plugins/about/src/main.rs b/default-plugins/about/src/main.rs
+index 25ed538..a429605 100644
+--- a/default-plugins/about/src/main.rs
++++ b/default-plugins/about/src/main.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ mod active_component;
+ mod keybindings;
+ mod onboarding;
+@@ -15,7 +16,7 @@ use tips::MAX_TIP_INDEX;
+ 
+ use crate::active_component::ActiveComponent;
+ use crate::keybindings::{apply_missing_binds, ApplyStatus, Feature, KeybindingState};
+-use crate::onboarding::{DesktopFacts, DESKTOP_TIP_INDEX, HOME_MANAGER_NOTE};
++use crate::onboarding::{DesktopFacts, DESKTOP_TIP_INDEX};
+ use crate::pages::{ComponentLine, PageKind, Shared, TextOrCustomRender};
+ use zellij_tile::prelude::desktop_integration::{Item, RepairAnswer, Request, Response};
+ 
+@@ -171,13 +172,14 @@ impl ZellijPlugin for App {
+             },
+             Event::FailedToWriteConfigToDisk(file_path) => {
+                 if self.applying_keybindings() {
+-                    let mut lines = vec![format!(
+-                        "The keybindings work in this session, but {} could not be written.",
+-                        file_path
+-                            .clone()
+-                            .unwrap_or_else(|| "the config file".to_owned())
++                    let file_str = file_path
++                        .clone()
++                        .unwrap_or_else(|| tr("the config file").to_owned());
++                    let mut lines = vec![trf(
++                        "The keybindings work in this session, but {file} could not be written.",
++                        &[("file", &file_str)],
+                     )];
+-                    lines.push("Add these lines to it yourself:".to_owned());
++                    lines.push(tr("Add these lines to it yourself:").to_owned());
+                     lines.extend(
+                         onboarding::kdl_for_binds(
+                             &self.keybinding_state.borrow().binds_for_config(),
+@@ -185,7 +187,7 @@ impl ZellijPlugin for App {
+                         .into_iter()
+                         .map(|l| format!("    {}", l)),
+                     );
+-                    lines.push(HOME_MANAGER_NOTE.to_owned());
++                    lines.push(tr("If your config file comes from home-manager, set this through programs.zellij.settings.").to_owned());
+                     self.keybinding_state
+                         .borrow_mut()
+                         .set_status(ApplyStatus::Failed(file_path));
+@@ -194,9 +196,9 @@ impl ZellijPlugin for App {
+                 } else if self.waiting_for_config_to_be_written {
+                     let error = match file_path {
+                         Some(file_path) => {
+-                            format!("Failed to write config to disk at: {}", file_path)
++                            trf("Failed to write config to disk at: {path}", &[("path", &file_path.to_string())])
+                         },
+-                        None => format!("Failed to write config to disk."),
++                        None => tr("Failed to write config to disk.").to_string(),
+                     };
+                     eprintln!("{}", error);
+                     self.error = Some(error);
+@@ -569,20 +571,20 @@ impl App {
+             .with_title(Text::from(format!("{}", error)).color_range(3, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![ActiveComponent::new(TextOrCustomRender::Text(
+-                    Text::from("Unable to permanently dismiss tips."),
++                    Text::from(tr("Unable to permanently dismiss tips.")),
+                 ))]),
+                 ComponentLine::new(vec![ActiveComponent::new(TextOrCustomRender::Text(
+-                    Text::from("You can do so manually by adding the following to your config:"),
++                    Text::from(tr("You can do so manually by adding the following to your config:")),
+                 ))]),
+             ])
+             .with_paragraph(vec![ComponentLine::new(vec![ActiveComponent::new(
+                 TextOrCustomRender::Text(Text::from("show_startup_tips false").color_range(0, ..)),
+             )])])
+             .with_paragraph(vec![ComponentLine::new(vec![ActiveComponent::new(
+-                TextOrCustomRender::Text(Text::from(HOME_MANAGER_NOTE)),
++                TextOrCustomRender::Text(Text::from(tr("If your config file comes from home-manager, set this through programs.zellij.settings."))),
+             )])])
+             .with_help(Box::new(|_hovering_over_link, _menu_item_is_selected| {
+-                Text::from("<ESC> - dismiss").color_range(1, ..=4)
++                Text::from(tr("<ESC> - dismiss")).color_range(1, ..=4)
+             }));
+         error_page.render(rows, cols, &None)
+     }
+diff --git a/default-plugins/about/src/onboarding.rs b/default-plugins/about/src/onboarding.rs
+index 3a9df5f..33c9303 100644
+--- a/default-plugins/about/src/onboarding.rs
++++ b/default-plugins/about/src/onboarding.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use std::cell::RefCell;
+ use std::collections::BTreeMap;
+ use std::rc::Rc;
+@@ -18,8 +19,6 @@ use crate::pages::{
+ pub const DESKTOP_TIP_INDEX: usize = 12;
+ pub const LAST_ONBOARDING_TIP_INDEX: usize = 16;
+ pub const INTEGRATIONS_URL: &str = "https://zellij.dev/PLACEHOLDER-integrations";
+-pub const HOME_MANAGER_NOTE: &str =
+-    "If your config file comes from home-manager, set this through programs.zellij.settings.";
+ 
+ #[derive(Debug, Clone, Default)]
+ pub struct DesktopFacts {
+@@ -58,7 +57,7 @@ fn pane_mode_keys(base_mode: InputMode, key: &str) -> String {
+ }
+ 
+ fn esc_help() -> Text {
+-    Text::from("Help: <ESC> - Go back").color_range(1, 6..=10)
++    Text::from(tr("Help: <ESC> - Go back")).color_range(1, 6..=10)
+ }
+ 
+ fn command_line(command: &str) -> ComponentLine {
+@@ -77,7 +76,7 @@ fn settings_link_line(prefix: &str, targets: &[(&'static str, &'static str)]) ->
+         }
+         let page = *page;
+         components.push(link(
+-            format!("Settings → {}", label),
++            trf("Settings → {label}", &[("label", &label)]),
+             ClickAction::new_run(move || open_settings(Some(page))),
+         ));
+     }
+@@ -86,7 +85,7 @@ fn settings_link_line(prefix: &str, targets: &[(&'static str, &'static str)]) ->
+ 
+ fn try_it_out_line(keys: Option<String>, fallback: &str, action: ClickAction) -> ComponentLine {
+     ComponentLine::new(vec![
+-        text_piece("Try it out: "),
++        text_piece(tr("Try it out: ")),
+         link(keys.unwrap_or_else(|| fallback.to_owned()), action),
+     ])
+ }
+@@ -111,34 +110,34 @@ impl Page {
+         let facts = shared.facts.borrow().clone();
+         let mut keys = vec![];
+         if !facts.in_desktop_terminal {
+-            keys.push(key_line("<w>", "open this session in a window"));
++            keys.push(key_line("<w>", tr("open this session in a window")));
+         }
+         if facts.launcher_installable {
+-            keys.push(key_line("<i>", "add Zellij to your app menu"));
++            keys.push(key_line("<i>", tr("add Zellij to your app menu")));
+         }
+         keys.push(key_line(
+             "<s>",
+             "Setup Zellij: tray icon, default terminal and more",
+         ));
+-        let mut help = String::from("Help:");
++        let mut help = String::from(tr("Help:"));
+         if !facts.in_desktop_terminal {
+-            help.push_str(" <w> - Open in a window,");
++            help.push_str(tr(" <w> - Open in a window,"));
+         }
+         if facts.launcher_installable {
+-            help.push_str(" <i> - Add to app menu,");
++            help.push_str(tr(" <i> - Add to app menu,"));
+         }
+-        help.push_str(" <s> - Setup Zellij, <ESC> - Go back");
++        help.push_str(tr(" <s> - Setup Zellij, <ESC> - Go back"));
+         Page::new()
+             .with_kind(PageKind::DesktopApp)
+-            .with_title(Text::from("Zellij Can Now be Your Terminal").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Can Now be Your Terminal")).color_range(0, ..))
+             .with_paragraph(vec![
+-                line("Zellij can now also be your terminal, giving you a native multiplexer"),
+-                line("experience inside a desktop application. Zellij can still run inside"),
+-                line("another terminal, and sessions can be shared between the two and remotely."),
++                line(tr("Zellij can now also be your terminal, giving you a native multiplexer")),
++                line(tr("experience inside a desktop application. Zellij can still run inside")),
++                line(tr("another terminal, and sessions can be shared between the two and remotely.")),
+             ])
+-            .with_paragraph(vec![line("Try it out:"), command_line("zellij terminal")])
++            .with_paragraph(vec![line(tr("Try it out:")), command_line("zellij terminal")])
+             .with_paragraph(vec![
+-                line("Install it on your desktop and tray:"),
++                line(tr("Install it on your desktop and tray:")),
+                 command_line("zellij setup --install-desktop-entry"),
+             ])
+             .with_paragraph(keys)
+@@ -163,20 +162,20 @@ impl Page {
+         let inbox_keys = shared.keybinding_state.borrow().inbox_keys();
+         let mut page = Page::new()
+             .with_kind(PageKind::Inbox)
+-            .with_title(Text::from("Inbox").color_range(0, ..))
++            .with_title(Text::from(tr("Inbox")).color_range(0, ..))
+             .with_paragraph(vec![
+-                line("Zellij now includes a built-in attention system managed inside a new Inbox."),
+-                line("Programs and shells can request your attention, and you can follow running"),
+-                line("programs to find out when they are done or have errored."),
++                line(tr("Zellij now includes a built-in attention system managed inside a new Inbox.")),
++                line(tr("Programs and shells can request your attention, and you can follow running")),
++                line(tr("programs to find out when they are done or have errored.")),
+             ])
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+-                    text_piece("The inbox integrates natively with the desktop "),
++                    text_piece(tr("The inbox integrates natively with the desktop ")),
+                     terminal,
+-                    text_piece(" and system tray."),
++                    text_piece(tr(" and system tray.")),
+                 ]),
+                 ComponentLine::new(vec![
+-                    text_piece("Many programs will work out of the box. For others, see "),
++                    text_piece(tr("Many programs will work out of the box. For others, see ")),
+                     link(
+                         "our integrations",
+                         ClickAction::new_open_link(
+@@ -209,20 +208,20 @@ impl Page {
+         let session_manager_keys = shared.keybinding_state.borrow().session_manager_keys();
+         Page::new()
+             .with_kind(PageKind::SessionPreviews)
+-            .with_title(Text::from("Session Previews").color_range(0, ..))
++            .with_title(Text::from(tr("Session Previews")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+-                    text_piece("The "),
++                    text_piece(tr("The ")),
+                     link("session manager", open_session_manager_action(shared)),
+-                    text_piece(" now includes session previews, allowing you to"),
++                    text_piece(tr(" now includes session previews, allowing you to")),
+                 ]),
+-                line("both view all sessions running on the machine and type into them for quick"),
+-                line("commands without switching. This also integrates with the"),
++                line(tr("both view all sessions running on the machine and type into them for quick")),
++                line(tr("commands without switching. This also integrates with the")),
+                 ComponentLine::new(vec![
+                     link("desktop client and tray icon", terminal_page_action(shared)),
+-                    text_piece(", allowing you to browse sessions at a glance"),
++                    text_piece(tr(", allowing you to browse sessions at a glance")),
+                 ]),
+-                line("without opening a terminal."),
++                line(tr("without opening a terminal.")),
+             ])
+             .with_paragraph(vec![try_it_out_line(
+                 session_manager_keys,
+@@ -235,14 +234,14 @@ impl Page {
+     pub fn new_mouse_control(_shared: &Shared) -> Page {
+         Page::new()
+             .with_title(
+-                Text::from("Right-click Menu and Improved Mouse Control").color_range(0, ..),
++                Text::from(tr("Right-click Menu and Improved Mouse Control")).color_range(0, ..),
+             )
+             .with_paragraph(vec![
+-                line("Zellij now includes a configurable right-click menu, allowing quick actions"),
++                line(tr("Zellij now includes a configurable right-click menu, allowing quick actions")),
+                 line(
+                     "with a mouse click. The menu is contextual on terminal panes, tabs and stack",
+                 ),
+-                line("titles."),
++                line(tr("titles.")),
+             ])
+             .with_paragraph(vec![styled(
+                 Text::from(
+@@ -262,15 +261,15 @@ impl Page {
+ 
+     pub fn new_settings_screen(_shared: &Shared) -> Page {
+         Page::new()
+-            .with_title(Text::from("Settings Screen").color_range(0, ..))
++            .with_title(Text::from(tr("Settings Screen")).color_range(0, ..))
+             .with_paragraph(vec![
+-                line("Zellij now includes a settings screen to change its behavior and appearance"),
+-                line("in a straightforward way, without hunting through configuration files."),
+-                line("Configuration files still work as before, with the settings screen acting"),
+-                line("as their user interface."),
++                line(tr("Zellij now includes a settings screen to change its behavior and appearance")),
++                line(tr("in a straightforward way, without hunting through configuration files.")),
++                line(tr("Configuration files still work as before, with the settings screen acting")),
++                line(tr("as their user interface.")),
+             ])
+             .with_paragraph(vec![ComponentLine::new(vec![
+-                text_piece("Open it: "),
++                text_piece(tr("Open it: ")),
+                 link("Settings", ClickAction::new_run(|| open_settings(None))),
+             ])])
+             .with_help(Box::new(feature_page_help))
+@@ -296,7 +295,7 @@ impl Page {
+             .with_title(Text::from(title).color_range(2, ..))
+             .with_paragraph(lines)
+             .with_help(Box::new(|_hovering_over_link, _menu_item_is_selected| {
+-                Text::from("Help: <ESC> - Dismiss").color_range(1, 6..=10)
++                Text::from(tr("Help: <ESC> - Dismiss")).color_range(1, 6..=10)
+             }))
+     }
+ 
+@@ -313,16 +312,16 @@ impl Page {
+         }
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Your Zellij launcher is broken").color_range(2, ..))
++            .with_title(Text::from(tr("Your Zellij launcher is broken")).color_range(2, ..))
+             .with_paragraph(lines)
+             .with_paragraph(vec![styled(
+-                Text::from("<y> yes · <n> no · <v> never ask again")
++                Text::from(tr("<y> yes · <n> no · <v> never ask again"))
+                     .color_substring(3, "<y>")
+                     .color_substring(3, "<n>")
+                     .color_substring(3, "<v>"),
+             )])
+             .with_help(Box::new(|_hovering_over_link, _menu_item_is_selected| {
+-                Text::from("Help: <y> - Fix it, <n> - Not now, <v> - Never, <ESC> - Not now")
++                Text::from(tr("Help: <y> - Fix it, <n> - Not now, <v> - Never, <ESC> - Not now"))
+                     .color_substring(1, "<y>")
+                     .color_substring(1, "<n>")
+                     .color_substring(1, "<v>")
+@@ -350,12 +349,12 @@ impl Page {
+             DESKTOP_TIP_INDEX,
+             vec![
+                 styled(
+-                    Text::from("Zellij can run as its own app: zellij terminal")
++                    Text::from(tr("Zellij can run as its own app: zellij terminal"))
+                         .color_substring(3, "zellij terminal"),
+                 ),
+-                line("It has a tray icon and desktop notifications, and closing a window keeps"),
+-                line("its session running. Its launcher's right-click menu has Show Inbox and"),
+-                line("Show Sessions, and Zellij can become your default terminal (Setup Zellij)."),
++                line(tr("It has a tray icon and desktop notifications, and closing a window keeps")),
++                line(tr("its session running. Its launcher's right-click menu has Show Inbox and")),
++                line(tr("Show Sessions, and Zellij can become your default terminal (Setup Zellij).")),
+                 styled(Text::from(REMOTE_WARNING).dim_all()),
+             ],
+         )
+@@ -373,7 +372,7 @@ impl Page {
+                     ))
+                     .color_substring(3, &session_mode_keys(base_mode, "i")),
+                 ),
+-                line("session. Preview a pane's output, reply to it, or go straight there."),
++                line(tr("session. Preview a pane's output, reply to it, or go straight there.")),
+                 styled(
+                     Text::from(format!(
+                         "{} jumps to the next item.",
+@@ -393,7 +392,7 @@ impl Page {
+         tip_page(
+             DESKTOP_TIP_INDEX + 2,
+             vec![
+-                line("Too many notifications from one pane?"),
++                line(tr("Too many notifications from one pane?")),
+                 styled(
+                     Text::from(format!("{} mutes it, {} ignores its output,", mute, ignore))
+                         .color_substring(3, &mute)
+@@ -418,8 +417,8 @@ impl Page {
+                     Text::from("zellij run --notify -- cargo build")
+                         .color_substring(3, "zellij run --notify"),
+                 ),
+-                line("runs a command in a new pane and tells you when it finishes, even when you"),
+-                line("are looking at another tab or another session."),
++                line(tr("runs a command in a new pane and tells you when it finishes, even when you")),
++                line(tr("are looking at another tab or another session.")),
+             ],
+         )
+     }
+@@ -457,7 +456,7 @@ impl Page {
+ fn tip_page(index: usize, lines: Vec<ComponentLine>) -> Page {
+     Page::new()
+         .main_screen()
+-        .with_title(Text::from(format!("Zellij Tip #{}", index + 1)).color_range(0, ..))
++        .with_title(Text::from(trf("Zellij Tip #{n}", &[("n", &(index + 1).to_string())])).color_range(0, ..))
+         .with_paragraph(lines)
+         .with_help(Box::new(|_hovering_over_link, _menu_item_is_selected| {
+             Text::from(
+diff --git a/default-plugins/about/src/pages.rs b/default-plugins/about/src/pages.rs
+index 6e0287a..f412ef7 100644
+--- a/default-plugins/about/src/pages.rs
++++ b/default-plugins/about/src/pages.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use zellij_tile::prelude::*;
+ 
+ use std::cell::RefCell;
+@@ -85,21 +86,21 @@ impl Page {
+                     &shared,
+                     Page::new_desktop_app,
+                 ),
+-                main_menu_entry("Inbox", &shared, Page::new_inbox),
+-                main_menu_entry("Session Previews", &shared, Page::new_session_previews),
++                main_menu_entry(tr("Inbox"), &shared, Page::new_inbox),
++                main_menu_entry(tr("Session Previews"), &shared, Page::new_session_previews),
+                 main_menu_entry(
+                     "Right-click Menu and Improved Mouse Control",
+                     &shared,
+                     Page::new_mouse_control,
+                 ),
+-                main_menu_entry("Settings Screen", &shared, Page::new_settings_screen),
++                main_menu_entry(tr("Settings Screen"), &shared, Page::new_settings_screen),
+             ]));
+         page = page.with_paragraph(vec![ComponentLine::new(vec![
+             ActiveComponent::new(TextOrCustomRender::Text(
+-                Text::from("Use Zellij as your terminal app").color_range(2, ..),
++                Text::from(tr("Use Zellij as your terminal app")).color_range(2, ..),
+             ))
+             .with_hover(TextOrCustomRender::Text(
+-                Text::from("Use Zellij as your terminal app")
++                Text::from(tr("Use Zellij as your terminal app"))
+                     .color_range(2, ..)
+                     .selected(),
+             ))
+@@ -109,11 +110,11 @@ impl Page {
+             }))
+             .keyboard_selectable(),
+             ActiveComponent::new(TextOrCustomRender::Text(
+-                Text::from(" · <s> Setup Zellij").color_substring(3, "<s>"),
++                Text::from(tr(" · <s> Setup Zellij")).color_substring(3, "<s>"),
+             )),
+         ])]);
+         page.with_paragraph(vec![ComponentLine::new(vec![
+-            ActiveComponent::new(TextOrCustomRender::Text(Text::from("Full Changelog: "))),
++            ActiveComponent::new(TextOrCustomRender::Text(Text::from(tr("Full Changelog: ")))),
+             ActiveComponent::new(TextOrCustomRender::Text(changelog_link_unselected(
+                 zellij_version.clone(),
+             )))
+@@ -156,7 +157,7 @@ impl Page {
+                     .iter()
+                     .map(|(key_text, description)| format!("{} {}", key_text, description))
+                     .collect();
+-                let mut text = Text::from(format!("{} mode + {}", mode_name, keys.join(", ")))
++                let mut text = Text::from(trf("{mode} mode + {keys}", &[("mode", &mode_name), ("keys", &keys.join(", "))]))
+                     .color_substring(3, &mode_name);
+                 for (key_text, _description) in &binds {
+                     text = text.color_substring(3, key_text);
+@@ -170,10 +171,9 @@ impl Page {
+             .iter()
+             .map(|(bind, currently_bound_to)| {
+                 ComponentLine::new(vec![ActiveComponent::new(TextOrCustomRender::Text(
+-                    Text::from(format!(
+-                        "{} is currently bound to {} and will be overwritten",
+-                        bind.key_text(),
+-                        currently_bound_to
++                    Text::from(trf(
++                        "{key} is currently bound to {action} and will be overwritten",
++                        &[("key", bind.key_text().as_str()), ("action", currently_bound_to)]
+                     ))
+                     .color_substring(3, &bind.key_text())
+                     .color_substring(0, currently_bound_to),
+@@ -183,10 +183,10 @@ impl Page {
+         let status = keybinding_state.borrow().status().clone();
+         let mut page = Page::new()
+             .with_kind(PageKind::UpdateKeybindings)
+-            .with_title(Text::from("Update Keybindings").color_range(0, ..))
++            .with_title(Text::from(tr("Update Keybindings")).color_range(0, ..))
+             .with_paragraph(feature_sentence(shared))
+             .with_bulletin_list(
+-                BulletinList::new(Text::from("New keybindings:").color_range(2, ..))
++                BulletinList::new(Text::from(tr("New keybindings:")).color_range(2, ..))
+                     .with_items(keybind_items),
+             );
+         if !conflicting_binds.is_empty() {
+@@ -195,9 +195,9 @@ impl Page {
+         match status {
+             ApplyStatus::NotApplied => page
+                 .with_paragraph(vec![ComponentLine::new(vec![
+-                    ActiveComponent::new(TextOrCustomRender::Text(Text::from(
++                    ActiveComponent::new(TextOrCustomRender::Text(Text::from(tr(
+                         "Add these keybindings to your configuration file? (",
+-                    ))),
++                    )))),
+                     ActiveComponent::new(TextOrCustomRender::Text(confirm_text()))
+                         .with_hover(TextOrCustomRender::CustomRender(
+                             Box::new(confirm_key_selected),
+@@ -223,7 +223,7 @@ impl Page {
+                     ActiveComponent::new(TextOrCustomRender::Text(Text::from(")"))),
+                 ])])
+                 .with_help(Box::new(|_hovering_over_link, _menu_item_is_selected| {
+-                    Text::from("Help: <y> - Add Keybindings, <n> - Cancel, <ESC> - Go back")
++                    Text::from(tr("Help: <y> - Add Keybindings, <n> - Cancel, <ESC> - Go back"))
+                         .color_substring(1, "<y>")
+                         .color_substring(1, "<n>")
+                         .color_substring(1, "<ESC>")
+@@ -252,17 +252,17 @@ fn main_menu_entry(
+ 
+ fn keybinding_status_text(status: &ApplyStatus) -> Text {
+     match status {
+-        ApplyStatus::Applying => Text::from("Adding keybindings...").color_range(2, ..),
++        ApplyStatus::Applying => Text::from(tr("Adding keybindings...")).color_range(2, ..),
+         ApplyStatus::Applied => {
+-            Text::from("Keybindings added and saved to your config file.").color_range(2, ..)
++            Text::from(tr("Keybindings added and saved to your config file.")).color_range(2, ..)
+         },
+-        ApplyStatus::Failed(Some(config_file)) => Text::from(format!(
+-            "Keybindings added to this session, but {} could not be written.",
+-            config_file
++        ApplyStatus::Failed(Some(config_file)) => Text::from(trf(
++            "Keybindings added to this session, but {file} could not be written.",
++            &[("file", config_file.as_str())]
+         ))
+         .color_range(3, ..),
+         ApplyStatus::Failed(None) => Text::from(
+-            "Keybindings added to this session, but the config file could not be written.",
++            tr("Keybindings added to this session, but the config file could not be written."),
+         )
+         .color_range(3, ..),
+         ApplyStatus::NotApplied => Text::from(""),
+@@ -277,7 +277,7 @@ pub(crate) fn missing_binds_note(shared: &Shared, feature: Feature) -> Option<Ve
+     match status {
+         ApplyStatus::NotApplied if has_missing_binds => Some(vec![ComponentLine::new(vec![
+             ActiveComponent::new(TextOrCustomRender::Text(
+-                Text::from("Note: these keybindings are not in your config file. Add them? (")
++                Text::from(tr("Note: these keybindings are not in your config file. Add them? ("))
+                     .color_substring(2, "Note:"),
+             )),
+             ActiveComponent::new(TextOrCustomRender::Text(confirm_text()))
+@@ -328,11 +328,11 @@ fn feature_page(feature: Feature, shared: &Shared) -> Page {
+ }
+ 
+ fn confirm_text() -> Text {
+-    Text::from("y").color_range(3, ..)
++    Text::from(tr("y")).color_range(3, ..)
+ }
+ 
+ fn cancel_text() -> Text {
+-    Text::from("n").color_range(3, ..)
++    Text::from(tr("n")).color_range(3, ..)
+ }
+ 
+ fn confirm_key_selected(x: usize, y: usize) -> usize {
+@@ -405,7 +405,7 @@ fn feature_sentence(shared: &Shared) -> Vec<ComponentLine> {
+     for (feature_index, feature) in features.iter().enumerate() {
+         let is_last = feature_index == features.len().saturating_sub(1);
+         if feature_index > 0 && is_last {
+-            pieces.push(("and ".to_owned(), None));
++            pieces.push((tr("and ").to_owned(), None));
+         }
+         pieces.push((feature.label().to_owned(), Some(*feature)));
+         let punctuation = if is_last {
+@@ -740,7 +740,7 @@ impl Page {
+ 
+ fn render_error(error: &str, y: usize) {
+     print_text_with_coordinates(
+-        Text::from(format!("ERROR: {}", error)).color_range(3, ..),
++        Text::from(trf("ERROR: {error}", &[("error", error)])).color_range(3, ..),
+         0,
+         y,
+         None,
+@@ -791,7 +791,7 @@ fn sponsors_link_text_selected_len() -> usize {
+ 
+ // Text components
+ fn whats_new_title() -> Text {
+-    Text::from("What's new?")
++    Text::from(tr("What's new?"))
+ }
+ 
+ fn main_screen_title(version: String, is_release_notes: bool) -> Text {
+@@ -812,16 +812,16 @@ fn main_screen_help_text(
+     if hovering_over_link {
+         return link_hover_help();
+     }
+-    let mut help_text = String::from("Help: <↓↑> - Navigate");
++    let mut help_text = String::from(tr("Help: <↓↑> - Navigate"));
+     if menu_item_is_selected {
+-        help_text.push_str(", <ENTER> - Learn More");
++        help_text.push_str(tr(", <ENTER> - Learn More"));
+     }
+     if has_missing_binds {
+-        help_text.push_str(", <u> - Update Keybindings");
++        help_text.push_str(tr(", <u> - Update Keybindings"));
+     }
+-    help_text.push_str(", <s> - Setup, <ESC> - Dismiss");
++    help_text.push_str(tr(", <s> - Setup, <ESC> - Dismiss"));
+     if !menu_item_is_selected {
+-        help_text.push_str(", <?> - Usage Tips");
++        help_text.push_str(tr(", <?> - Usage Tips"));
+     }
+     color_help_keys(help_text)
+ }
+@@ -838,20 +838,20 @@ fn color_help_keys(help_text: String) -> Text {
+ }
+ 
+ fn link_hover_help() -> Text {
+-    Text::from("Help: Click or Shift-Click to open in browser")
++    Text::from(tr("Help: Click or Shift-Click to open in browser"))
+         .color_range(3, 6..=10)
+         .color_range(3, 15..=25)
+ }
+ 
+ pub fn feature_page_help(_hovering_over_link: bool, _menu_item_is_selected: bool) -> Text {
+-    Text::from("Help: <↓↑> - Navigate, <ENTER> - Open, <ESC> - Go back")
++    Text::from(tr("Help: <↓↑> - Navigate, <ENTER> - Open, <ESC> - Go back"))
+         .color_substring(1, "<↓↑>")
+         .color_substring(1, "<ENTER>")
+         .color_substring(1, "<ESC>")
+ }
+ 
+ fn esc_to_go_back_help() -> Text {
+-    let help_text = format!("Help: <ESC> - Go back");
++    let help_text = tr("Help: <ESC> - Go back").to_string();
+     Text::from(help_text).color_range(1, 6..=10)
+ }
+ 
+@@ -860,7 +860,7 @@ fn main_menu_item(item_name: &str) -> Text {
+ }
+ 
+ fn support_the_developer_text() -> Text {
+-    let support_text = format!("Please support the Zellij developer <3: ");
++    let support_text = tr("Please support the Zellij developer <3: ").to_string();
+     Text::from(support_text).color_range(3, ..)
+ }
+ 
+diff --git a/default-plugins/about/src/tips.rs b/default-plugins/about/src/tips.rs
+index f1ca9cc..14c69fa 100644
+--- a/default-plugins/about/src/tips.rs
++++ b/default-plugins/about/src/tips.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use zellij_tile::prelude::*;
+ 
+ use std::cell::RefCell;
+@@ -55,21 +56,21 @@ impl Page {
+     pub fn tip_1(link_executable: Rc<RefCell<String>>) -> Self {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #1").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #1")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("Check out the Zellij screencasts/tutorials to learn how to better take advantage")
++                            Text::from(tr("Check out the Zellij screencasts/tutorials to learn how to better take advantage"))
+                     ))
+                 ]),
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("of all the Zellij features. Learn about basic usage, layouts, sessions and more!")
++                            Text::from(tr("of all the Zellij features. Learn about basic usage, layouts, sessions and more!"))
+                     ))
+                 ])
+             ])
+             .with_paragraph(vec![ComponentLine::new(vec![
+-                ActiveComponent::new(TextOrCustomRender::Text(Text::from("Follow this link: ").color_range(2, ..))),
++                ActiveComponent::new(TextOrCustomRender::Text(Text::from(tr("Follow this link: ")).color_range(2, ..))),
+                 ActiveComponent::new(TextOrCustomRender::Text(Text::from("https://zellij.dev/screencasts")))
+                 .with_hover(TextOrCustomRender::CustomRender(
+                     Box::new(screencasts_link_selected()),
+@@ -99,17 +100,17 @@ impl Page {
+     pub fn tip_2(link_executable: Rc<RefCell<String>>, base_mode: Rc<RefCell<InputMode>>) -> Self {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #2").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #2")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("You can open the terminal contents in your $EDITOR, allowing you to search")
++                            Text::from(tr("You can open the terminal contents in your $EDITOR, allowing you to search"))
+                                 .color_range(2, 43..=49)
+                     ))
+                 ]),
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("through them, copy to your clipboard or even save them for later.")
++                            Text::from(tr("through them, copy to your clipboard or even save them for later."))
+                     ))
+                 ])
+             ])
+@@ -117,14 +118,14 @@ impl Page {
+                 match *base_mode.borrow() {
+                     InputMode::Locked => {
+                         ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("While focused on a terminal pane: Ctrl g + s + e")
++                            Text::from(tr("While focused on a terminal pane: Ctrl g + s + e"))
+                                 .color_range(0, 34..=39)
+                                 .color_indices(0, vec![43, 47])
+                         ))
+                     },
+                     _ => {
+                         ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("While focused on a terminal pane: Ctrl s + e")
++                            Text::from(tr("While focused on a terminal pane: Ctrl s + e"))
+                                 .color_range(0, 34..=39)
+                                 .color_indices(0, vec![43])
+                         ))
+@@ -150,10 +151,10 @@ impl Page {
+     pub fn tip_3(link_executable: Rc<RefCell<String>>) -> Self {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #3").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #3")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![ActiveComponent::new(TextOrCustomRender::Text(
+-                    Text::from("Want to make your floating pane bigger?"),
++                    Text::from(tr("Want to make your floating pane bigger?")),
+                 ))]),
+                 ComponentLine::new(vec![ActiveComponent::new(TextOrCustomRender::Text(
+                     Text::from(
+@@ -182,30 +183,30 @@ impl Page {
+     fn tip_4(link_executable: Rc<RefCell<String>>, base_mode: Rc<RefCell<InputMode>>) -> Page {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij tip #4").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij tip #4")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![ActiveComponent::new(TextOrCustomRender::Text(
+-                    Text::from("It's possible to \"pin\" a floating pane so that it will always"),
++                    Text::from(tr("It's possible to \"pin\" a floating pane so that it will always")),
+                 ))]),
+                 ComponentLine::new(vec![ActiveComponent::new(TextOrCustomRender::Text(
+-                    Text::from("be visible even if floating panes are hidden."),
++                    Text::from(tr("be visible even if floating panes are hidden.")),
+                 ))]),
+             ])
+             .with_bulletin_list(
+                 BulletinList::new(
+-                    Text::from(format!("Floating panes can be \"pinned\": ")).color_range(2, ..),
++                    Text::from(tr("Floating panes can be \"pinned\": ")).color_range(2, ..),
+                 )
+                 .with_items(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("With a mouse click on their top right corner")
++                        Text::from(tr("With a mouse click on their top right corner"))
+                             .color_range(3, 7..=17),
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(match *base_mode.borrow() {
+-                        InputMode::Locked => Text::from("With Ctrl g + p + i")
++                        InputMode::Locked => Text::from(tr("With Ctrl g + p + i"))
+                             .color_range(3, 5..=10)
+                             .color_range(3, 14..15)
+                             .color_range(3, 18..19),
+-                        _ => Text::from("With Ctrl p + i")
++                        _ => Text::from(tr("With Ctrl p + i"))
+                             .color_range(3, 5..=10)
+                             .color_range(3, 14..15),
+                     })),
+@@ -213,10 +214,10 @@ impl Page {
+             )
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![ActiveComponent::new(TextOrCustomRender::Text(
+-                    Text::from("A great use case for these is to tail log files or to show"),
++                    Text::from(tr("A great use case for these is to tail log files or to show")),
+                 ))]),
+                 ComponentLine::new(vec![ActiveComponent::new(TextOrCustomRender::Text(
+-                    Text::from("real-time compiler output while working in other panes."),
++                    Text::from(tr("real-time compiler output while working in other panes.")),
+                 ))]),
+             ])
+             .with_paragraph(vec![ComponentLine::new(vec![
+@@ -238,33 +239,33 @@ impl Page {
+     pub fn tip_5(link_executable: Rc<RefCell<String>>) -> Page {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #5").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #5")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+-                    ActiveComponent::new(TextOrCustomRender::Text(Text::from("Panes can be resized into stacks to be managed easier."))),
++                    ActiveComponent::new(TextOrCustomRender::Text(Text::from(tr("Panes can be resized into stacks to be managed easier.")))),
+                 ]),
+             ])
+-            .with_bulletin_list(BulletinList::new(Text::from("To try it out:").color_range(2, ..))
++            .with_bulletin_list(BulletinList::new(Text::from(tr("To try it out:")).color_range(2, ..))
+                 .with_items(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("Hide this pane with Alt f (you can bring it back with Alt f again)")
++                            Text::from(tr("Hide this pane with Alt f (you can bring it back with Alt f again)"))
+                                 .color_range(3, 20..=24)
+                                 .color_range(3, 54..=58)
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("Open 4-5 panes with Alt n")
++                            Text::from(tr("Open 4-5 panes with Alt n"))
+                                 .color_range(3, 20..=24)
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("Press Alt + until you reach full screen")
++                            Text::from(tr("Press Alt + until you reach full screen"))
+                                 .color_range(3, 6..=10)
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("Press Alt - until you are back at the original state")
++                            Text::from(tr("Press Alt - until you are back at the original state"))
+                                 .color_range(3, 6..=10)
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("You can always snap back to the built-in swap layouts with Alt <[]>")
++                            Text::from(tr("You can always snap back to the built-in swap layouts with Alt <[]>"))
+                                 .color_range(3, 59..=61)
+                                 .color_range(3, 64..=65)
+                     )),
+@@ -273,7 +274,7 @@ impl Page {
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("To disable this behavior, add stacked_resize false to the Zellij Configuration")
++                            Text::from(tr("To disable this behavior, add stacked_resize false to the Zellij Configuration"))
+                                 .color_range(3, 30..=49)
+                     )),
+                 ])
+@@ -281,7 +282,7 @@ impl Page {
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("For more details, see: ")
++                        Text::from(tr("For more details, see: "))
+                             .color_range(2, ..)
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(Text::from("https://zellij.dev/tutorials/stacked-resize")))
+@@ -308,34 +309,34 @@ impl Page {
+     pub fn tip_6(link_executable: Rc<RefCell<String>>, base_mode: Rc<RefCell<InputMode>>) -> Page {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #6").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #6")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+-                    ActiveComponent::new(TextOrCustomRender::Text(Text::from("Are the Zellij keybindings colliding with other applications for you?")))
++                    ActiveComponent::new(TextOrCustomRender::Text(Text::from(tr("Are the Zellij keybindings colliding with other applications for you?"))))
+                 ]),
+             ])
+-            .with_bulletin_list(BulletinList::new(Text::from("Check out the non-colliding keybindings preset:"))
++            .with_bulletin_list(BulletinList::new(Text::from(tr("Check out the non-colliding keybindings preset:")))
+                 .with_items(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+                             match *base_mode.borrow() {
+                                 InputMode::Locked => {
+-                                    Text::from("Open the Zellij configuration with Ctrl g + o + c")
++                                    Text::from(tr("Open the Zellij configuration with Ctrl g + o + c"))
+                                         .color_range(3, 35..=40)
+                                         .color_indices(3, vec![44, 48])
+                                 },
+                                 _ => {
+-                                    Text::from("Open the Zellij configuration with Ctrl o + c")
++                                    Text::from(tr("Open the Zellij configuration with Ctrl o + c"))
+                                         .color_range(3, 35..=40)
+                                         .color_indices(3, vec![44])
+                                 }
+                             }
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("Press TAB to go to Change Mode Behavior")
++                            Text::from(tr("Press TAB to go to Change Mode Behavior"))
+                                 .color_range(3, 6..=9)
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                            Text::from("Select non-colliding temporarily with ENTER or permanently with Ctrl a")
++                            Text::from(tr("Select non-colliding temporarily with ENTER or permanently with Ctrl a"))
+                                 .color_range(3, 38..=42)
+                                 .color_range(3, 64..=69)
+                     )),
+@@ -344,7 +345,7 @@ impl Page {
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("For more details, see: ")
++                        Text::from(tr("For more details, see: "))
+                             .color_range(2, ..)
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(Text::from("https://zellij.dev/tutorials/colliding-keybindings")))
+@@ -371,7 +372,7 @@ impl Page {
+     pub fn tip_7(link_executable: Rc<RefCell<String>>) -> Page {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #7").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #7")).color_range(0, ..))
+             .with_paragraph(vec![ComponentLine::new(vec![ActiveComponent::new(
+                 TextOrCustomRender::Text(Text::from(
+                     "Want to customize the appearance and colors of Zellij?",
+@@ -380,7 +381,7 @@ impl Page {
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("Check out the built-in themes: ").color_range(2, ..),
++                        Text::from(tr("Check out the built-in themes: ")).color_range(2, ..),
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(Text::from(
+                         "https://zellij.dev/documentation/theme-list",
+@@ -396,7 +397,7 @@ impl Page {
+                 ]),
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("Or create your own theme: ").color_range(2, ..),
++                        Text::from(tr("Or create your own theme: ")).color_range(2, ..),
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(Text::from(
+                         "https://zellij.dev/documentation/themes",
+@@ -430,11 +431,11 @@ impl Page {
+     pub fn tip_8(link_executable: Rc<RefCell<String>>) -> Page {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #8").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #8")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("If you change the pane focus with Alt + <←↓↑→> or Alt + <hjkl> beyond the")
++                        Text::from(tr("If you change the pane focus with Alt + <←↓↑→> or Alt + <hjkl> beyond the"))
+                             .color_range(0, 34..=36)
+                             .color_range(2, 40..=45)
+                             .color_range(0, 50..=52)
+@@ -442,7 +443,7 @@ impl Page {
+                     ))
+                 ]),
+                 ComponentLine::new(vec![
+-                    ActiveComponent::new(TextOrCustomRender::Text(Text::from("right or left side of the screen, the next or previous tab will be focused.")))
++                    ActiveComponent::new(TextOrCustomRender::Text(Text::from(tr("right or left side of the screen, the next or previous tab will be focused."))))
+                 ]),
+             ])
+             .with_paragraph(vec![ComponentLine::new(vec![
+@@ -464,16 +465,16 @@ impl Page {
+     pub fn tip_9(link_executable: Rc<RefCell<String>>) -> Page {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #9").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #9")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("For plugins, integrations and tutorials created by the community, check out the")
++                        Text::from(tr("For plugins, integrations and tutorials created by the community, check out the"))
+                     ))
+                 ]),
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("Awesome-zellij repository: ")
++                        Text::from(tr("Awesome-zellij repository: "))
+                             .color_range(2, ..=39)
+                     )),
+                     ActiveComponent::new(TextOrCustomRender::Text(Text::from("https://github.com/zellij-org/awesome-zellij")))
+@@ -490,12 +491,12 @@ impl Page {
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("For community and support:")
++                        Text::from(tr("For community and support:"))
+                             .color_range(2, ..)
+                     ))
+                 ]),
+                 ComponentLine::new(vec![
+-                    ActiveComponent::new(TextOrCustomRender::Text(Text::from("Discord: "))),
++                    ActiveComponent::new(TextOrCustomRender::Text(Text::from(tr("Discord: ")))),
+                     ActiveComponent::new(TextOrCustomRender::Text(Text::from("https://discord.com/invite/CrUAFH3")))
+                         .with_hover(TextOrCustomRender::CustomRender(
+                             Box::new(discord_link_text_selected),
+@@ -507,7 +508,7 @@ impl Page {
+                         )),
+                 ]),
+                 ComponentLine::new(vec![
+-                    ActiveComponent::new(TextOrCustomRender::Text(Text::from("Matrix: "))),
++                    ActiveComponent::new(TextOrCustomRender::Text(Text::from(tr("Matrix: ")))),
+                     ActiveComponent::new(TextOrCustomRender::Text(Text::from("https://matrix.to/#/#zellij_general:matrix.org")))
+                         .with_hover(TextOrCustomRender::CustomRender(
+                             Box::new(matrix_link_text_selected),
+@@ -538,10 +539,10 @@ impl Page {
+     pub fn tip_10(link_executable: Rc<RefCell<String>>, base_mode: Rc<RefCell<InputMode>>) -> Page {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #10").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #10")).color_range(0, ..))
+             .with_bulletin_list(
+                 BulletinList::new(
+-                    Text::from("The Zellij session-manager can:").color_range(2, 11..=25),
++                    Text::from(tr("The Zellij session-manager can:")).color_range(2, 11..=25),
+                 )
+                 .with_items(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(Text::from(
+@@ -563,18 +564,18 @@ impl Page {
+             )
+             .with_paragraph(vec![ComponentLine::new(vec![ActiveComponent::new(
+                 TextOrCustomRender::Text(match *base_mode.borrow() {
+-                    InputMode::Locked => Text::from("Check it out with: Ctrl g + o + w")
++                    InputMode::Locked => Text::from(tr("Check it out with: Ctrl g + o + w"))
+                         .color_substring(3, "Ctrl g")
+                         .color_nth_substring(3, "o", 1)
+                         .color_last_substring(3, "w"),
+-                    _ => Text::from("Check it out with: Ctrl o + w")
++                    _ => Text::from(tr("Check it out with: Ctrl o + w"))
+                         .color_substring(3, "Ctrl o")
+                         .color_last_substring(3, "w"),
+                 }),
+             )])])
+             .with_paragraph(vec![ComponentLine::new(vec![ActiveComponent::new(
+                 TextOrCustomRender::Text(
+-                    Text::from("You can also use it as a welcome screen with: zellij -l welcome")
++                    Text::from(tr("You can also use it as a welcome screen with: zellij -l welcome"))
+                         .color_range(0, 46..=62),
+                 ),
+             )])])
+@@ -597,37 +598,37 @@ impl Page {
+     pub fn tip_11(link_executable: Rc<RefCell<String>>) -> Page {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #11").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #11")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("You can change the arrangement of panes on screen with Alt + []")
++                        Text::from(tr("You can change the arrangement of panes on screen with Alt + []"))
+                             .color_range(0, 55..=57)
+                             .color_range(2, 61..=62)
+                     )),
+                 ]),
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("This works with tiled or floating panes, depending which is visible.")
++                        Text::from(tr("This works with tiled or floating panes, depending which is visible."))
+                     ))
+                 ])
+             ])
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("Resizing or splitting a pane breaks out of this arrangement. It is then possible")
++                        Text::from(tr("Resizing or splitting a pane breaks out of this arrangement. It is then possible"))
+                     )),
+                 ]),
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("to snap back by pressing Alt + [] once more. This status can be seen")
++                        Text::from(tr("to snap back by pressing Alt + [] once more. This status can be seen"))
+                             .color_range(0, 25..=27)
+                             .color_range(2, 31..=32)
+                     )),
+                 ]),
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("on the top right corner of the screen.")
++                        Text::from(tr("on the top right corner of the screen."))
+                     )),
+                 ]),
+             ])
+@@ -650,24 +651,24 @@ impl Page {
+     pub fn tip_12(link_executable: Rc<RefCell<String>>, base_mode: Rc<RefCell<InputMode>>) -> Page {
+         Page::new()
+             .main_screen()
+-            .with_title(Text::from("Zellij Tip #12").color_range(0, ..))
++            .with_title(Text::from(tr("Zellij Tip #12")).color_range(0, ..))
+             .with_paragraph(vec![
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+-                        Text::from("Zellij plugins can be loaded, reloaded and tracked from the plugin-manager.")
++                        Text::from(tr("Zellij plugins can be loaded, reloaded and tracked from the plugin-manager."))
+                     )),
+                 ]),
+                 ComponentLine::new(vec![
+                     ActiveComponent::new(TextOrCustomRender::Text(
+                             match *base_mode.borrow() {
+                                 InputMode::Locked => {
+-                                    Text::from("Check it out with: Ctrl g + o + p")
++                                    Text::from(tr("Check it out with: Ctrl g + o + p"))
+                                         .color_substring(3, "Ctrl g")
+                                         .color_nth_substring(3, "o", 1)
+                                         .color_last_substring(3, "p")
+                                 },
+                                 _ => {
+-                                    Text::from("Check it out with: Ctrl o + p")
++                                    Text::from(tr("Check it out with: Ctrl o + p"))
+                                         .color_substring(3, "Ctrl o")
+                                         .color_last_substring(3, "p")
+                                 }
+@@ -676,7 +677,7 @@ impl Page {
+                 ]),
+             ])
+             .with_paragraph(vec![ComponentLine::new(vec![
+-                ActiveComponent::new(TextOrCustomRender::Text(Text::from("To learn more about plugins: ").color_range(2, ..))),
++                ActiveComponent::new(TextOrCustomRender::Text(Text::from(tr("To learn more about plugins: ")).color_range(2, ..))),
+                 ActiveComponent::new(TextOrCustomRender::Text(Text::from("https://zellij.dev/documentation/plugins")))
+                     .with_hover(TextOrCustomRender::CustomRender(
+                         Box::new(plugin_docs_link_text_selected),
+@@ -825,7 +826,7 @@ fn theme_list_selected_len() -> usize {
+ }
+ 
+ fn support_the_developer_text() -> Text {
+-    let support_text = format!("Please support the Zellij developer <3: ");
++    let support_text = tr("Please support the Zellij developer <3: ").to_string();
+     Text::from(support_text).color_range(3, ..)
+ }
+ 
+@@ -846,7 +847,7 @@ fn screencasts_link_selected_len() -> Box<dyn Fn() -> usize> {
+ 
+ fn tips_help_text(hovering_over_link: bool) -> Text {
+     if hovering_over_link {
+-        let help_text = format!("Help: Click or Shift-Click to open in browser");
++        let help_text = tr("Help: Click or Shift-Click to open in browser").to_string();
+         Text::from(help_text)
+             .color_range(3, 6..=10)
+             .color_range(3, 15..=25)
+diff --git a/default-plugins/bars/src/status_bar/tip/data/compact_layout.rs b/default-plugins/bars/src/status_bar/tip/data/compact_layout.rs
+index 16c4566..ecf7c11 100644
+--- a/default-plugins/bars/src/status_bar/tip/data/compact_layout.rs
++++ b/default-plugins/bars/src/status_bar/tip/data/compact_layout.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{
+     ANSIString, ANSIStrings,
+@@ -28,13 +29,13 @@ pub fn compact_layout_full(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     let mut bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("UI taking up too much space? Start Zellij with "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("UI taking up too much space? Start Zellij with ")),
+         Style::new()
+             .fg(green_color)
+             .bold()
+             .paint("zellij -l compact"),
+-        Style::new().paint(" or remove pane frames with "),
++        Style::new().paint(tr(" or remove pane frames with ")),
+     ];
+     bits.extend(add_keybinds(help));
+     strings!(&bits)
+@@ -44,13 +45,13 @@ pub fn compact_layout_medium(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     let mut bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("To save screen space, start Zellij with "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("To save screen space, start Zellij with ")),
+         Style::new()
+             .fg(green_color)
+             .bold()
+             .paint("zellij -l compact"),
+-        Style::new().paint(" or remove frames with "),
++        Style::new().paint(tr(" or remove frames with ")),
+     ];
+     bits.extend(add_keybinds(help));
+     strings!(&bits)
+@@ -60,12 +61,12 @@ pub fn compact_layout_short(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     let mut bits = vec![
+-        Style::new().paint(" Save screen space, start with: "),
++        Style::new().paint(tr(" Save screen space, start with: ")),
+         Style::new()
+             .fg(green_color)
+             .bold()
+             .paint("zellij -l compact"),
+-        Style::new().paint(" or remove frames with "),
++        Style::new().paint(tr(" or remove frames with ")),
+     ];
+     bits.extend(add_keybinds(help));
+     strings!(&bits)
+@@ -89,7 +90,7 @@ fn add_keybinds<'a>(help: &'a ModeInfo) -> Vec<ANSIString<'a>> {
+     );
+ 
+     if pane_frames.is_empty() {
+-        return vec![Style::new().bold().paint("UNBOUND")];
++        return vec![Style::new().bold().paint(tr("UNBOUND"))];
+     }
+ 
+     let mut bits = vec![];
+diff --git a/default-plugins/bars/src/status_bar/tip/data/edit_scrollbuffer.rs b/default-plugins/bars/src/status_bar/tip/data/edit_scrollbuffer.rs
+index a43e32a..152462a 100644
+--- a/default-plugins/bars/src/status_bar/tip/data/edit_scrollbuffer.rs
++++ b/default-plugins/bars/src/status_bar/tip/data/edit_scrollbuffer.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{
+     ANSIString, ANSIStrings,
+@@ -27,10 +28,10 @@ pub fn edit_scrollbuffer_full(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     let mut bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("Search through the scrollbuffer using your default "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("Search through the scrollbuffer using your default ")),
+         Style::new().fg(green_color).bold().paint("$EDITOR"),
+-        Style::new().paint(" with "),
++        Style::new().paint(tr(" with ")),
+     ];
+     bits.extend(add_keybinds(help));
+     strings!(&bits)
+@@ -40,10 +41,10 @@ pub fn edit_scrollbuffer_medium(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     let mut bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("Search the scrollbuffer using your "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("Search the scrollbuffer using your ")),
+         Style::new().fg(green_color).bold().paint("$EDITOR"),
+-        Style::new().paint(" with "),
++        Style::new().paint(tr(" with ")),
+     ];
+     bits.extend(add_keybinds(help));
+     strings!(&bits)
+@@ -53,9 +54,9 @@ pub fn edit_scrollbuffer_short(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     let mut bits = vec![
+-        Style::new().paint(" Search using "),
++        Style::new().paint(tr(" Search using ")),
+         Style::new().fg(green_color).bold().paint("$EDITOR"),
+-        Style::new().paint(" with "),
++        Style::new().paint(tr(" with ")),
+     ];
+     bits.extend(add_keybinds(help));
+     strings!(&bits)
+@@ -79,7 +80,7 @@ fn add_keybinds<'a>(help: &'a ModeInfo) -> Vec<ANSIString<'a>> {
+     );
+ 
+     if edit_buffer.is_empty() {
+-        return vec![Style::new().bold().paint("UNBOUND")];
++        return vec![Style::new().bold().paint(tr("UNBOUND"))];
+     }
+ 
+     let mut bits = vec![];
+diff --git a/default-plugins/bars/src/status_bar/tip/data/floating_panes_mouse.rs b/default-plugins/bars/src/status_bar/tip/data/floating_panes_mouse.rs
+index 71a7509..565fcca 100644
+--- a/default-plugins/bars/src/status_bar/tip/data/floating_panes_mouse.rs
++++ b/default-plugins/bars/src/status_bar/tip/data/floating_panes_mouse.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{ANSIString, ANSIStrings, Style};
+ 
+@@ -20,18 +21,18 @@ macro_rules! strings {
+ 
+ pub fn floating_panes_mouse_full(help: &ModeInfo) -> LinePart {
+     let mut bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("Toggle floating panes with "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("Toggle floating panes with ")),
+     ];
+     bits.extend(add_keybinds(help));
+-    bits.push(Style::new().paint(" and move them with keyboard or mouse"));
++    bits.push(Style::new().paint(tr(" and move them with keyboard or mouse")));
+     strings!(&bits)
+ }
+ 
+ pub fn floating_panes_mouse_medium(help: &ModeInfo) -> LinePart {
+     let mut bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("Toggle floating panes with "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("Toggle floating panes with ")),
+     ];
+     bits.extend(add_keybinds(help));
+     strings!(&bits)
+@@ -39,7 +40,7 @@ pub fn floating_panes_mouse_medium(help: &ModeInfo) -> LinePart {
+ 
+ pub fn floating_panes_mouse_short(help: &ModeInfo) -> LinePart {
+     let mut bits = add_keybinds(help);
+-    bits.push(Style::new().paint(" => floating panes"));
++    bits.push(Style::new().paint(tr(" => floating panes")));
+     strings!(&bits)
+ }
+ 
+@@ -61,7 +62,7 @@ fn add_keybinds<'a>(help: &'a ModeInfo) -> Vec<ANSIString<'a>> {
+     );
+ 
+     if floating_toggle.is_empty() {
+-        return vec![Style::new().bold().paint("UNBOUND")];
++        return vec![Style::new().bold().paint(tr("UNBOUND"))];
+     }
+ 
+     let mut bits = vec![];
+diff --git a/default-plugins/bars/src/status_bar/tip/data/move_focus_hjkl_tab_switch.rs b/default-plugins/bars/src/status_bar/tip/data/move_focus_hjkl_tab_switch.rs
+index 2600b96..22b0da0 100644
+--- a/default-plugins/bars/src/status_bar/tip/data/move_focus_hjkl_tab_switch.rs
++++ b/default-plugins/bars/src/status_bar/tip/data/move_focus_hjkl_tab_switch.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{ANSIString, ANSIStrings, Style};
+ 
+@@ -20,27 +21,27 @@ macro_rules! strings {
+ 
+ pub fn move_focus_hjkl_tab_switch_full(help: &ModeInfo) -> LinePart {
+     let mut bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("When changing focus with "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("When changing focus with ")),
+     ];
+     bits.extend(add_keybinds(help));
+-    bits.push(Style::new().paint(" moving off screen left/right focuses the next tab."));
++    bits.push(Style::new().paint(tr(" moving off screen left/right focuses the next tab.")));
+     strings!(&bits)
+ }
+ 
+ pub fn move_focus_hjkl_tab_switch_medium(help: &ModeInfo) -> LinePart {
+     let mut bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("Changing focus with "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("Changing focus with ")),
+     ];
+     bits.extend(add_keybinds(help));
+-    bits.push(Style::new().paint(" off screen focuses the next tab."));
++    bits.push(Style::new().paint(tr(" off screen focuses the next tab.")));
+     strings!(&bits)
+ }
+ 
+ pub fn move_focus_hjkl_tab_switch_short(help: &ModeInfo) -> LinePart {
+     let mut bits = add_keybinds(help);
+-    bits.push(Style::new().paint(" off screen edge focuses next tab."));
++    bits.push(Style::new().paint(tr(" off screen edge focuses next tab.")));
+     strings!(&bits)
+ }
+ 
+@@ -75,13 +76,13 @@ fn add_keybinds<'a>(help: &'a ModeInfo) -> Vec<ANSIString<'a>> {
+     let arrows = style_key_with_modifier(&arrows, &help.style.colors, None);
+     let letters = style_key_with_modifier(&letters, &help.style.colors, None);
+     if arrows.is_empty() && letters.is_empty() {
+-        vec![Style::new().bold().paint("UNBOUND")]
++        vec![Style::new().bold().paint(tr("UNBOUND"))]
+     } else if arrows.is_empty() || letters.is_empty() {
+         arrows.into_iter().chain(letters.into_iter()).collect()
+     } else {
+         arrows
+             .into_iter()
+-            .chain(vec![Style::new().paint(" or ")].into_iter())
++            .chain(vec![Style::new().paint(tr(" or "))].into_iter())
+             .chain(letters.into_iter())
+             .collect()
+     }
+diff --git a/default-plugins/bars/src/status_bar/tip/data/move_tabs.rs b/default-plugins/bars/src/status_bar/tip/data/move_tabs.rs
+index f15ec0a..3613d98 100644
+--- a/default-plugins/bars/src/status_bar/tip/data/move_tabs.rs
++++ b/default-plugins/bars/src/status_bar/tip/data/move_tabs.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{
+     ANSIString, ANSIStrings,
+@@ -28,12 +29,12 @@ pub fn move_tabs_full(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_2);
+ 
+     let bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("Wrong order of tabs? You can move them to left and right with: "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("Wrong order of tabs? You can move them to left and right with: ")),
+         Style::new().fg(green_color).bold().paint("Alt + i"),
+-        Style::new().paint(" (left) and "),
++        Style::new().paint(tr(" (left) and ")),
+         Style::new().fg(green_color).bold().paint("Alt + o"),
+-        Style::new().paint(" (right)"),
++        Style::new().paint(tr(" (right)")),
+     ];
+     strings!(&bits)
+ }
+@@ -42,12 +43,12 @@ pub fn move_tabs_medium(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_2);
+ 
+     let bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("You can move tabs to left and right with: "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("You can move tabs to left and right with: ")),
+         Style::new().fg(green_color).bold().paint("Alt + i"),
+-        Style::new().paint(" (left) and "),
++        Style::new().paint(tr(" (left) and ")),
+         Style::new().fg(green_color).bold().paint("Alt + o"),
+-        Style::new().paint(" (right)"),
++        Style::new().paint(tr(" (right)")),
+     ];
+     strings!(&bits)
+ }
+@@ -56,11 +57,11 @@ pub fn move_tabs_short(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_2);
+ 
+     let bits = vec![
+-        Style::new().paint(" Move tabs with: "),
++        Style::new().paint(tr(" Move tabs with: ")),
+         Style::new().fg(green_color).bold().paint("Alt + i"),
+-        Style::new().paint(" (left) and "),
++        Style::new().paint(tr(" (left) and ")),
+         Style::new().fg(green_color).bold().paint("Alt + o"),
+-        Style::new().paint(" (right)"),
++        Style::new().paint(tr(" (right)")),
+     ];
+     strings!(&bits)
+ }
+diff --git a/default-plugins/bars/src/status_bar/tip/data/quicknav.rs b/default-plugins/bars/src/status_bar/tip/data/quicknav.rs
+index e1f3eed..bf9cbd7 100644
+--- a/default-plugins/bars/src/status_bar/tip/data/quicknav.rs
++++ b/default-plugins/bars/src/status_bar/tip/data/quicknav.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{ANSIString, ANSIStrings, Style};
+ 
+@@ -21,33 +22,33 @@ macro_rules! strings {
+ pub fn quicknav_full(help: &ModeInfo) -> LinePart {
+     let groups = add_keybinds(help);
+ 
+-    let mut bits = vec![Style::new().paint(" Tip: ")];
++    let mut bits = vec![Style::new().paint(tr(" Tip: "))];
+     bits.extend(groups.new_pane);
+-    bits.push(Style::new().paint(" => open new pane. "));
++    bits.push(Style::new().paint(tr(" => open new pane. ")));
+     bits.extend(groups.move_focus);
+-    bits.push(Style::new().paint(" => navigate between panes. "));
++    bits.push(Style::new().paint(tr(" => navigate between panes. ")));
+     bits.extend(groups.resize);
+-    bits.push(Style::new().paint(" => increase/decrease pane size."));
++    bits.push(Style::new().paint(tr(" => increase/decrease pane size.")));
+     strings!(&bits)
+ }
+ 
+ pub fn quicknav_medium(help: &ModeInfo) -> LinePart {
+     let groups = add_keybinds(help);
+ 
+-    let mut bits = vec![Style::new().paint(" Tip: ")];
++    let mut bits = vec![Style::new().paint(tr(" Tip: "))];
+     bits.extend(groups.new_pane);
+-    bits.push(Style::new().paint(" => new pane. "));
++    bits.push(Style::new().paint(tr(" => new pane. ")));
+     bits.extend(groups.move_focus);
+-    bits.push(Style::new().paint(" => navigate. "));
++    bits.push(Style::new().paint(tr(" => navigate. ")));
+     bits.extend(groups.resize);
+-    bits.push(Style::new().paint(" => resize pane."));
++    bits.push(Style::new().paint(tr(" => resize pane.")));
+     strings!(&bits)
+ }
+ 
+ pub fn quicknav_short(help: &ModeInfo) -> LinePart {
+     let groups = add_keybinds(help);
+ 
+-    let mut bits = vec![Style::new().paint(" QuickNav: ")];
++    let mut bits = vec![Style::new().paint(tr(" QuickNav: "))];
+     bits.extend(groups.new_pane);
+     bits.push(Style::new().paint(" / "));
+     bits.extend(groups.move_focus);
+@@ -73,7 +74,7 @@ fn add_keybinds<'a>(help: &'a ModeInfo) -> Keygroups<'a> {
+         }],
+     );
+     let new_pane = if new_pane_keys.is_empty() {
+-        vec![Style::new().bold().paint("UNBOUND")]
++        vec![Style::new().bold().paint(tr("UNBOUND"))]
+     } else {
+         style_key_with_modifier(&new_pane_keys, &help.style.colors, None)
+     };
+@@ -97,7 +98,7 @@ fn add_keybinds<'a>(help: &'a ModeInfo) -> Keygroups<'a> {
+         resize_keys.retain(|k| k != &KeyWithModifier::new(BareKey::Char('=')).with_alt_modifier())
+     }
+     let resize = if resize_keys.is_empty() {
+-        vec![Style::new().bold().paint("UNBOUND")]
++        vec![Style::new().bold().paint(tr("UNBOUND"))]
+     } else {
+         style_key_with_modifier(&resize_keys, &help.style.colors, None)
+     };
+@@ -142,13 +143,13 @@ fn add_keybinds<'a>(help: &'a ModeInfo) -> Keygroups<'a> {
+     let arrows = style_key_with_modifier(&arrows, &help.style.colors, None);
+     let letters = style_key_with_modifier(&letters, &help.style.colors, None);
+     let move_focus = if arrows.is_empty() && letters.is_empty() {
+-        vec![Style::new().bold().paint("UNBOUND")]
++        vec![Style::new().bold().paint(tr("UNBOUND"))]
+     } else if arrows.is_empty() || letters.is_empty() {
+         arrows.into_iter().chain(letters.into_iter()).collect()
+     } else {
+         arrows
+             .into_iter()
+-            .chain(vec![Style::new().paint(" or ")].into_iter())
++            .chain(vec![Style::new().paint(tr(" or "))].into_iter())
+             .chain(letters.into_iter())
+             .collect()
+     };
+diff --git a/default-plugins/bars/src/status_bar/tip/data/send_mouse_click_to_terminal.rs b/default-plugins/bars/src/status_bar/tip/data/send_mouse_click_to_terminal.rs
+index ec2c02f..4be5814 100644
+--- a/default-plugins/bars/src/status_bar/tip/data/send_mouse_click_to_terminal.rs
++++ b/default-plugins/bars/src/status_bar/tip/data/send_mouse_click_to_terminal.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{
+     ANSIString, ANSIStrings,
+@@ -28,11 +29,11 @@ pub fn mouse_click_to_terminal_full(help: &ModeInfo) -> LinePart {
+     let orange_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     strings!(&[
+-        Style::new().paint(" Tip: "),
++        Style::new().paint(tr(" Tip: ")),
+         Style::new().fg(orange_color).bold().paint("Shift"),
+         Style::new().paint(" + <"),
+         Style::new().fg(green_color).bold().paint("mouse-click"),
+-        Style::new().paint("> bypasses Zellij and sends the mouse click directly to the terminal."),
++        Style::new().paint(tr("> bypasses Zellij and sends the mouse click directly to the terminal.")),
+     ])
+ }
+ 
+@@ -40,11 +41,11 @@ pub fn mouse_click_to_terminal_medium(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_2);
+     let orange_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+     strings!(&[
+-        Style::new().paint(" Tip: "),
++        Style::new().paint(tr(" Tip: ")),
+         Style::new().fg(orange_color).bold().paint("Shift"),
+         Style::new().paint(" + <"),
+         Style::new().fg(green_color).bold().paint("mouse-click"),
+-        Style::new().paint("> sends the click directly to the terminal."),
++        Style::new().paint(tr("> sends the click directly to the terminal.")),
+     ])
+ }
+ 
+@@ -53,10 +54,10 @@ pub fn mouse_click_to_terminal_short(help: &ModeInfo) -> LinePart {
+     let orange_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     strings!(&[
+-        Style::new().paint(" Tip: "),
++        Style::new().paint(tr(" Tip: ")),
+         Style::new().fg(orange_color).bold().paint("Shift"),
+         Style::new().paint(" + <"),
+         Style::new().fg(green_color).bold().paint("mouse-click"),
+-        Style::new().paint("> => sends click to terminal."),
++        Style::new().paint(tr("> => sends click to terminal.")),
+     ])
+ }
+diff --git a/default-plugins/bars/src/status_bar/tip/data/sync_tab.rs b/default-plugins/bars/src/status_bar/tip/data/sync_tab.rs
+index c543b87..669e126 100644
+--- a/default-plugins/bars/src/status_bar/tip/data/sync_tab.rs
++++ b/default-plugins/bars/src/status_bar/tip/data/sync_tab.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{ANSIString, ANSIStrings, Style};
+ 
+@@ -20,8 +21,8 @@ macro_rules! strings {
+ 
+ pub fn sync_tab_full(help: &ModeInfo) -> LinePart {
+     let mut bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("Sync a tab and write keyboard input to all its panes with "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("Sync a tab and write keyboard input to all its panes with ")),
+     ];
+     bits.extend(add_keybinds(help));
+     strings!(&bits)
+@@ -29,15 +30,15 @@ pub fn sync_tab_full(help: &ModeInfo) -> LinePart {
+ 
+ pub fn sync_tab_medium(help: &ModeInfo) -> LinePart {
+     let mut bits = vec![
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("Sync input to panes in a tab with "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("Sync input to panes in a tab with ")),
+     ];
+     bits.extend(add_keybinds(help));
+     strings!(&bits)
+ }
+ 
+ pub fn sync_tab_short(help: &ModeInfo) -> LinePart {
+-    let mut bits = vec![Style::new().paint(" Sync input in a tab with ")];
++    let mut bits = vec![Style::new().paint(tr(" Sync input in a tab with "))];
+     bits.extend(add_keybinds(help));
+     strings!(&bits)
+ }
+@@ -60,7 +61,7 @@ fn add_keybinds<'a>(help: &'a ModeInfo) -> Vec<ANSIString<'a>> {
+     );
+ 
+     if sync_tabs.is_empty() {
+-        return vec![Style::new().bold().paint("UNBOUND")];
++        return vec![Style::new().bold().paint(tr("UNBOUND"))];
+     }
+ 
+     let mut bits = vec![];
+diff --git a/default-plugins/bars/src/status_bar/tip/data/use_mouse.rs b/default-plugins/bars/src/status_bar/tip/data/use_mouse.rs
+index 62f7cd6..353b38e 100644
+--- a/default-plugins/bars/src/status_bar/tip/data/use_mouse.rs
++++ b/default-plugins/bars/src/status_bar/tip/data/use_mouse.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{
+     ANSIString, ANSIStrings,
+@@ -27,9 +28,9 @@ pub fn use_mouse_full(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_2);
+ 
+     strings!(&[
+-        Style::new().paint(" Tip: "),
+-        Style::new().fg(green_color).bold().paint("Use the mouse"),
+-        Style::new().paint(" to switch pane focus, scroll through the pane scrollbuffer, switch or scroll through the tabs."),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().fg(green_color).bold().paint(tr("Use the mouse")),
++        Style::new().paint(tr(" to switch pane focus, scroll through the pane scrollbuffer, switch or scroll through the tabs.")),
+     ])
+ }
+ 
+@@ -37,9 +38,9 @@ pub fn use_mouse_medium(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_2);
+ 
+     strings!(&[
+-        Style::new().paint(" Tip: "),
+-        Style::new().fg(green_color).bold().paint("Use the mouse"),
+-        Style::new().paint(" to switch pane/tabs or scroll through the pane scrollbuffer."),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().fg(green_color).bold().paint(tr("Use the mouse")),
++        Style::new().paint(tr(" to switch pane/tabs or scroll through the pane scrollbuffer.")),
+     ])
+ }
+ 
+@@ -47,7 +48,7 @@ pub fn use_mouse_short(help: &ModeInfo) -> LinePart {
+     let green_color = palette_match!(help.style.colors.text_unselected.emphasis_2);
+ 
+     strings!(&[
+-        Style::new().fg(green_color).bold().paint(" Use the mouse"),
+-        Style::new().paint(" to switch pane/tabs or scroll."),
++        Style::new().fg(green_color).bold().paint(tr(" Use the mouse")),
++        Style::new().paint(tr(" to switch pane/tabs or scroll.")),
+     ])
+ }
+diff --git a/default-plugins/bars/src/status_bar/tip/data/zellij_setup_check.rs b/default-plugins/bars/src/status_bar/tip/data/zellij_setup_check.rs
+index 52e03ad..1e79bd2 100644
+--- a/default-plugins/bars/src/status_bar/tip/data/zellij_setup_check.rs
++++ b/default-plugins/bars/src/status_bar/tip/data/zellij_setup_check.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{
+     ANSIString, ANSIStrings,
+@@ -27,8 +28,8 @@ pub fn zellij_setup_check_full(help: &ModeInfo) -> LinePart {
+     let orange_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     strings!(&[
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("Having issues with Zellij? Try running "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("Having issues with Zellij? Try running ")),
+         Style::new()
+             .fg(orange_color)
+             .bold()
+@@ -40,13 +41,13 @@ pub fn zellij_setup_check_medium(help: &ModeInfo) -> LinePart {
+     let orange_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     strings!(&[
+-        Style::new().paint(" Tip: "),
+-        Style::new().paint("Run "),
++        Style::new().paint(tr(" Tip: ")),
++        Style::new().paint(tr("Run ")),
+         Style::new()
+             .fg(orange_color)
+             .bold()
+             .paint("zellij setup --check"),
+-        Style::new().paint(" to find issues"),
++        Style::new().paint(tr(" to find issues")),
+     ])
+ }
+ 
+@@ -54,11 +55,11 @@ pub fn zellij_setup_check_short(help: &ModeInfo) -> LinePart {
+     let orange_color = palette_match!(help.style.colors.text_unselected.emphasis_0);
+ 
+     strings!(&[
+-        Style::new().paint(" Run "),
++        Style::new().paint(tr(" Run ")),
+         Style::new()
+             .fg(orange_color)
+             .bold()
+             .paint("zellij setup --check"),
+-        Style::new().paint(" to find issues"),
++        Style::new().paint(tr(" to find issues")),
+     ])
+ }

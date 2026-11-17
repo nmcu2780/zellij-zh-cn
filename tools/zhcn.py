@@ -1,0 +1,1016 @@
+#!/usr/bin/env python3
+"""zellij-zh-cn 维护工具（仅使用 Python 标准库）。
+
+子命令：
+  fetch           按 upstream.toml 把上游源码取到 .work/zellij 并核对提交
+  check           校验基线提交、补丁可应用性、译文目录合法性
+  apply           重置工作区、git am 应用补丁、生成译文产物、刷新 assets
+  build           check + apply + cargo xtask ci build-release
+  export-patches  把 zh-cn 分支的提交导出为补丁队列
+  report          对比代码中使用的键与译文目录
+  gen-rust        生成 Rust 译文目录文件
+  gen-web         生成网页 i18n.js（供 apply 调用，也可单独调试）
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import tomllib
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+WORK_DIR = REPO_ROOT / ".work"
+ZELLIJ_DIR_NAME = "zellij"
+CATALOG_PATH = REPO_ROOT / "i18n" / "zh-CN.toml"
+CARGO_LOCAL_CONFIG = WORK_DIR / "cargo-local.toml"
+I18N_CRATE_SRC = REPO_ROOT / "crates" / "zellij-i18n"
+WEB_I18N_TEMPLATE = REPO_ROOT / "web" / "i18n.js"
+WEB_CATALOG_MARKER = "/*__ZELLIJ_I18N_CATALOG__*/"
+
+# report/gen-web 的 JS 扫描排除：生成的 bundle、注入的 i18n.js、第三方文件
+JS_EXCLUDE = {"app.js", "i18n.js", "integrity.json"}
+
+RUST_KEY_RE = re.compile(r'\b(?:tr|trf|tr_ctx)\s*\(\s*"((?:[^"\\]|\\.)*)"', re.S)
+# t(...) 调用（含 zellijI18n.t(...)），在调用括号内取所有字符串字面量作键
+JS_CALL_RE = re.compile(r"(?<![\w$])t\s*\(")
+JS_STR_RE = re.compile(r"(['\"])((?:\\.|(?!\1).)*?)\1")
+
+
+def js_call_arg_text(line: str, open_paren: int) -> str:
+    """从 `t(` 的左括号位置开始，引号感知地扫描到匹配的右括号。"""
+    depth = 1
+    i = open_paren + 1
+    quote = None
+    while i < len(line):
+        c = line[i]
+        if quote:
+            if c == "\\":
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+        else:
+            if c in "'\"`":
+                quote = c
+            elif c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+                if depth == 0:
+                    return line[open_paren + 1 : i]
+        i += 1
+    return line[open_paren + 1 :]
+PLACEHOLDER_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def eprint(*args):
+    print(*args, file=sys.stderr)
+
+
+def run(cmd, cwd=None, env=None, capture=False):
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=env,
+        text=True,
+        capture_output=capture,
+    )
+    if capture:
+        return result
+    if result.returncode != 0:
+        raise SystemExit(f"命令执行失败（退出码 {result.returncode}）：{' '.join(map(str, cmd))}")
+    return result
+
+
+def git(*args, cwd, env=None):
+    return run(["git", *args], cwd=cwd, env=env, capture=True)
+
+
+def load_upstream() -> dict:
+    path = REPO_ROOT / "upstream.toml"
+    if not path.is_file():
+        raise SystemExit(f"缺少 {path}，无法确定上游基线。")
+    with path.open("rb") as f:
+        data = tomllib.load(f)
+    return data["upstream"]
+
+
+def workdir(args) -> Path:
+    return Path(args.workdir).resolve() if getattr(args, "workdir", None) else WORK_DIR / ZELLIJ_DIR_NAME
+
+
+def patches_dir(upstream: dict) -> Path:
+    return REPO_ROOT / upstream["patches"]
+
+
+# ── 译文目录 ──────────────────────────────────────────────────────────────
+
+
+def placeholder_set(text: str) -> set:
+    return set(PLACEHOLDER_RE.findall(text))
+
+
+def load_catalog(path: Path = CATALOG_PATH):
+    """读取并校验译文目录。返回 (entries, errors)；entries 为 dict。"""
+    errors = []
+    try:
+        with path.open("rb") as f:
+            raw = tomllib.load(f)
+    except FileNotFoundError:
+        return None, [f"译文目录不存在：{path}"]
+    except tomllib.TOMLDecodeError as e:
+        return None, [f"译文目录不是合法 TOML：{e}"]
+
+    if not isinstance(raw, dict):
+        return None, ["译文目录必须是平铺的键值表"]
+
+    entries = {}
+    for key, value in raw.items():
+        if not isinstance(value, str):
+            errors.append(f"目录项 {key!r} 的值不是字符串")
+            continue
+        if not value.strip():
+            errors.append(f"目录项 {key!r} 的译文为空")
+            continue
+        if placeholder_set(key) != placeholder_set(value):
+            errors.append(
+                f"目录项 {key!r} 占位符不一致：键 {sorted(placeholder_set(key))}，"
+                f"值 {sorted(placeholder_set(value))}"
+            )
+            continue
+        entries[key] = value
+    return entries, errors
+
+
+def validate_catalog() -> dict:
+    entries, errors = load_catalog()
+    if errors:
+        for e in errors:
+            eprint(f"目录错误：{e}")
+        raise SystemExit(
+            "译文目录校验失败：上游不受支持或目录不兼容，已拒绝构建。"
+            "系统安装的 zellij 不受影响。请修正 i18n/zh-CN.toml 后重试。"
+        )
+    return entries
+
+
+# ── cargo 镜像覆盖 ────────────────────────────────────────────────────────
+
+
+def cargo_env() -> dict:
+    """嵌套 cargo 调用用的环境：xtask 会再 spawn `cargo`，--config 传不进去，
+    而 source 替换也不能用 CARGO_SOURCE_* 环境变量表达，所以把
+    .work/cargo-local.toml 软链到 .work/.cargo/config.toml —— cargo 的
+    目录级配置发现会覆盖 .work/ 下的一切调用。"""
+    env = dict(os.environ)
+    link_dir = WORK_DIR / ".cargo"
+    link = link_dir / "config.toml"
+    if CARGO_LOCAL_CONFIG.is_file():
+        try:
+            with CARGO_LOCAL_CONFIG.open("rb") as f:
+                tomllib.load(f)
+        except tomllib.TOMLDecodeError as e:
+            eprint(f"警告：{CARGO_LOCAL_CONFIG} 不是合法 TOML（{e}），忽略本地镜像覆盖")
+            return env
+        link_dir.mkdir(parents=True, exist_ok=True)
+        if not (link.is_symlink() and os.readlink(link) == "../cargo-local.toml"):
+            if link.exists() or link.is_symlink():
+                link.unlink()
+            link.symlink_to("../cargo-local.toml")
+    elif link.is_symlink():
+        link.unlink()
+    return env
+
+
+def cargo_prefix_args() -> list:
+    """cargo 顶层调用附加的 --config 参数（子命令之前的全局选项）。"""
+    if CARGO_LOCAL_CONFIG.is_file():
+        return ["--config", str(CARGO_LOCAL_CONFIG)]
+    return []
+
+
+def cargo_cmd(*args) -> list:
+    return ["cargo", *cargo_prefix_args(), *args]
+
+
+# ── 子命令 ────────────────────────────────────────────────────────────────
+
+
+def cmd_fetch(args) -> int:
+    up = load_upstream()
+    tag = args.tag or up["tag"]
+    commit = args.commit or up["commit"]
+    wd = workdir(args)
+    wd.parent.mkdir(parents=True, exist_ok=True)
+
+    if not (wd / ".git").exists():
+        eprint(f">> 克隆 {up['repo']}（{tag}）到 {wd}")
+        run(["git", "clone", "--depth", "1", "--branch", tag, up["repo"], str(wd)])
+    else:
+        eprint(f">> 在 {wd} 中拉取 {tag}")
+        res = git("fetch", "--depth", "1", "origin", "tag", tag, cwd=wd)
+        if res.returncode != 0:
+            # 浅克隆里可能没有 tag 引用，退化为直接取提交
+            res = git("fetch", "--depth", "1", "origin", commit, cwd=wd)
+            if res.returncode != 0:
+                eprint(res.stderr)
+                raise SystemExit(f"获取上游 {tag} 失败")
+
+    res = git("checkout", "-f", commit, cwd=wd)
+    if res.returncode != 0:
+        eprint(res.stderr)
+        raise SystemExit(f"无法检出基线提交 {commit}")
+
+    head = git("rev-parse", "HEAD", cwd=wd).stdout.strip()
+    if head != commit:
+        raise SystemExit(f"基线校验失败：HEAD={head}，期望 {commit}")
+    eprint(f">> 上游就绪：{wd} @ {head[:12]}")
+    return 0
+
+
+def _check_head(wd: Path, commit: str):
+    if not (wd / ".git").exists():
+        raise SystemExit(f"上游源码不存在：{wd}。请先运行 tools/zhcn.py fetch")
+    head = git("rev-parse", "HEAD", cwd=wd).stdout.strip()
+    # HEAD 必须在基线提交上，或是由其派生的 zh-cn 补丁分支
+    derived = git("merge-base", "--is-ancestor", commit, "HEAD", cwd=wd)
+    if head != commit and derived.returncode != 0:
+        raise SystemExit(
+            f"上游基线不匹配：HEAD={head}，期望 {commit}。\n"
+            "该上游版本不受支持，已拒绝构建。系统安装的 zellij 不受影响。\n"
+            "恢复步骤：先运行 tools/zhcn.py fetch 重新获取基线，"
+            "或将 upstream.toml 更新为受支持版本后重新适配补丁。"
+        )
+
+
+def _check_patches_apply(wd: Path, pdir: Path, commit: str):
+    """在临时索引上按顺序 git apply --check，不碰工作区。"""
+    patches = sorted(pdir.glob("*.patch"))
+    if not patches:
+        raise SystemExit(f"补丁目录为空：{pdir}")
+    with tempfile.TemporaryDirectory() as td:
+        index = Path(td) / "index"
+        env = dict(os.environ, GIT_INDEX_FILE=str(index))
+        res = git("read-tree", commit, cwd=wd, env=env)
+        if res.returncode != 0:
+            raise SystemExit(f"无法建立临时索引：{res.stderr}")
+        for patch in patches:
+            res = git("apply", "--check", "--cached", str(patch), cwd=wd, env=env)
+            if res.returncode != 0:
+                raise SystemExit(
+                    f"补丁无法干净应用：{patch.name}\n{res.stderr}\n"
+                    "该上游版本与补丁队列不兼容，已拒绝构建。"
+                    "系统安装的 zellij 不受影响。\n"
+                    "恢复步骤：确认 .work/zellij 处于基线提交（tools/zhcn.py fetch），"
+                    "或更新补丁队列以匹配 upstream.toml 中的基线。"
+                )
+            # 应用到临时索引，让后续补丁按顺序叠加校验
+            res = git("apply", "--cached", str(patch), cwd=wd, env=env)
+            if res.returncode != 0:
+                raise SystemExit(f"补丁叠加失败：{patch.name}\n{res.stderr}")
+    eprint(f">> {len(patches)} 个补丁均可干净应用")
+
+
+def cmd_check(args) -> int:
+    up = load_upstream()
+    wd = workdir(args)
+    _check_head(wd, up["commit"])
+    pdir = patches_dir(up)
+    if not pdir.is_dir():
+        raise SystemExit(f"补丁目录不存在：{pdir}")
+    _check_patches_apply(wd, pdir, up["commit"])
+    validate_catalog()
+    eprint(">> check 通过：基线、补丁、译文目录均有效")
+    return 0
+
+
+# apply/build 会重置上游工作区。这些已跟踪路径由构建重新生成，其改动
+# 可以安全丢弃；其余已跟踪改动（以及 zh-cn 分支上未导出的提交）都会导致拒绝。
+REGENERATED_TRACKED = [
+    re.compile(r"zellij-client/assets/(app\.js|index\.html|integrity\.json)$"),
+    re.compile(r"zellij-utils/assets/plugins/.*\.wasm$"),
+]
+
+
+def _check_worktree_clean(wd: Path):
+    res = git("status", "--porcelain=v1", "--untracked-files=no", cwd=wd)
+    if res.returncode != 0:
+        raise SystemExit(f"无法读取工作区状态：{res.stderr}")
+    dirty = []
+    for line in res.stdout.splitlines():
+        path = line[3:]
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        path = path.strip('"')
+        if not any(p.search(path) for p in REGENERATED_TRACKED):
+            dirty.append(line)
+    if dirty:
+        raise SystemExit(
+            "上游工作区存在未提交的已跟踪改动，已拒绝 apply/build：\n  "
+            + "\n  ".join(dirty)
+            + "\n请先提交改动并用 tools/zhcn.py export-patches 导出补丁，"
+            "或确认可丢弃后加 --force。系统安装的 zellij 不受影响。"
+        )
+
+
+def _check_branch_matches_patches(wd: Path, commit: str, pdir: Path):
+    if git("rev-parse", "--verify", "--quiet", "zh-cn", cwd=wd).returncode != 0:
+        return  # 分支还不存在，首次 apply
+
+    def norm(text: str) -> str:
+        return "\n".join(
+            line for line in text.splitlines() if not line.startswith("Date: ")
+        ).strip()
+
+    res = git(
+        "format-patch", "--zero-commit", "--no-signature", "--stdout",
+        f"{commit}..zh-cn", cwd=wd,
+    )
+    if res.returncode != 0:
+        raise SystemExit(f"无法导出 zh-cn 分支进行比对：{res.stderr}")
+    branch_side = norm(res.stdout)
+    patch_side = norm("\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(pdir.glob("*.patch"))
+    ))
+    if branch_side != patch_side:
+        raise SystemExit(
+            "zh-cn 分支与已导出的补丁队列不一致：分支上可能有未导出的"
+            "提交或过期改动，已拒绝 apply/build 以防丢失工作。\n"
+            "恢复步骤：先运行 tools/zhcn.py export-patches 导出，"
+            "或把 zh-cn 恢复到与补丁一致；确认可丢弃后加 --force。"
+            "系统安装的 zellij 不受影响。"
+        )
+
+
+def cmd_apply(args) -> int:
+    up = load_upstream()
+    wd = workdir(args)
+    commit = up["commit"]
+    if not (wd / ".git").exists():
+        raise SystemExit(f"上游源码不存在：{wd}。请先运行 tools/zhcn.py fetch")
+    # apply 会重置工作区，只要求基线提交存在于仓库中（HEAD 可在 zh-cn 上）
+    res = git("cat-file", "-e", f"{commit}^{{commit}}", cwd=wd)
+    if res.returncode != 0:
+        raise SystemExit(
+            f"仓库中不存在基线提交 {commit}。请先运行 tools/zhcn.py fetch"
+        )
+
+    pdir = patches_dir(up)
+    patches = sorted(pdir.glob("*.patch"))
+    if not patches:
+        raise SystemExit(f"补丁目录为空：{pdir}")
+
+    if not getattr(args, "force", False):
+        _check_worktree_clean(wd)
+        _check_branch_matches_patches(wd, commit, pdir)
+
+    eprint(">> 重置工作区到基线提交")
+    res = git("checkout", "-f", "-B", "zh-cn", commit, cwd=wd)
+    if res.returncode != 0:
+        raise SystemExit(f"无法重置到基线：{res.stderr}")
+    res = git("clean", "-fdx", "-e", "target", cwd=wd)
+    if res.returncode != 0:
+        raise SystemExit(f"清理工作区失败：{res.stderr}")
+
+    eprint(f">> 应用 {len(patches)} 个补丁（git am）")
+    res = git("am", *[str(p) for p in patches], cwd=wd)
+    if res.returncode != 0:
+        eprint(res.stderr)
+        git("am", "--abort", cwd=wd)
+        raise SystemExit(
+            "补丁应用失败，已中止并恢复 zh-cn 分支到基线。\n"
+            "该上游版本与补丁队列不兼容，已拒绝构建。系统安装的 zellij 不受影响。"
+        )
+
+    # 拷贝 zellij-i18n crate 并生成 Rust 译文目录
+    crate_dst = wd / "zellij-i18n"
+    if crate_dst.exists():
+        shutil.rmtree(crate_dst)
+    shutil.copytree(I18N_CRATE_SRC, crate_dst)
+    entries = validate_catalog()
+    gen_rust_catalog(entries, crate_dst / "src" / "catalog_generated.rs")
+    eprint(">> 已拷贝 zellij-i18n 并生成 Rust 译文目录")
+
+    # 生成网页 i18n.js（只注入网页实际用到的键）
+    web_keys = extract_js_keys(wd)
+    gen_web_i18n(entries, web_keys, wd / "zellij-client" / "assets" / "i18n.js")
+    eprint(f">> 已生成 i18n.js（{len(web_keys)} 个网页键）")
+
+    eprint(">> 重新打包网页资源（cargo xtask assets）")
+    res = subprocess.run(
+        cargo_cmd("xtask", "assets"), cwd=wd, env=cargo_env(), text=True
+    )
+    if res.returncode != 0:
+        raise SystemExit(f"cargo xtask assets 失败（退出码 {res.returncode}）")
+    eprint(">> apply 完成")
+    return 0
+
+
+def cmd_build(args) -> int:
+    cmd_check(args)
+    cmd_apply(args)
+    up = load_upstream()
+    wd = workdir(args)
+    eprint(">> 开始 release 构建（cargo xtask ci build-release）")
+    res = subprocess.run(
+        cargo_cmd("xtask", "ci", "build-release"), cwd=wd, env=cargo_env()
+    )
+    if res.returncode != 0:
+        raise SystemExit(f"构建失败（退出码 {res.returncode}）")
+    binary = wd / "target" / "release" / "zellij"
+    if not binary.is_file():
+        raise SystemExit(f"构建结束但未找到二进制：{binary}")
+    write_buildinfo(up, binary)
+    print(f"构建完成：{binary}")
+    return 0
+
+
+def write_buildinfo(up: dict, binary: Path):
+    """在二进制旁写 zellij.zh-buildinfo.json，记录本次构建的基线、
+    补丁与译文目录的哈希，便于核对与汇报。"""
+    import datetime
+    import hashlib
+
+    def sha256(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    pdir = patches_dir(up)
+    info = {
+        "upstream_repo": up["repo"],
+        "upstream_version": up["version"],
+        "upstream_tag": up["tag"],
+        "upstream_commit": up["commit"],
+        "patch_dir": str(pdir.relative_to(REPO_ROOT)),
+        "patches": {p.name: sha256(p) for p in sorted(pdir.glob("*.patch"))},
+        "catalog_sha256": sha256(CATALOG_PATH),
+        "tool_sha256": sha256(Path(__file__).resolve()),
+        "built_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    out = binary.with_name(binary.name + ".zh-buildinfo.json")
+    out.write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def cmd_export_patches(args) -> int:
+    up = load_upstream()
+    wd = workdir(args)
+    pdir = patches_dir(up)
+    pdir.mkdir(parents=True, exist_ok=True)
+    for old in pdir.glob("*.patch"):
+        old.unlink()
+    forbidden = (
+        subprocess.run(
+            ["git", "-C", str(wd), "diff", "--name-only",
+             f"{up['commit']}..zh-cn", "--",
+             "zellij-utils/assets/plugins/",
+             "zellij-client/assets/app.js",
+             "zellij-client/assets/integrity.json"],
+            capture_output=True, text=True,
+        ).stdout.split()
+    )
+    if forbidden:
+        raise SystemExit(
+            "拒绝导出：以下构建产物不应进入补丁队列（由 cargo xtask assets / 插件构建再生成）：\n  "
+            + "\n  ".join(forbidden)
+            + "\n请从历史中移除这些文件改动（如 git rebase -i 删除或 git checkout <上游> -- <路径> 后 amend），再重新导出。"
+        )
+    res = git(
+        "format-patch",
+        f"{up['commit']}..zh-cn",
+        "--zero-commit",
+        "--no-signature",
+        "-o",
+        str(pdir),
+        cwd=wd,
+    )
+    if res.returncode != 0:
+        raise SystemExit(f"导出补丁失败：{res.stderr}")
+    exported = sorted(p.name for p in pdir.glob("*.patch"))
+    for name in exported:
+        print(name)
+    return 0
+
+
+# ── 键提取 ────────────────────────────────────────────────────────────────
+
+
+def iter_rust_files(wd: Path):
+    roots = [wd / "default-plugins"] + sorted(wd.glob("zellij-*/src"))
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.rs"):
+            parts = set(path.parts)
+            if "tests" in parts or "test" in parts:
+                continue
+            yield path
+
+
+def extract_rust_keys(wd: Path) -> dict:
+    """返回 {key: [位置]}。"""
+    used = {}
+    for path in iter_rust_files(wd):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        # 跳过测试模块（定位 #[cfg(test)] 后的 mod test*；个别文件中部有
+        # cfg(test) 辅助函数，不能用第一个标记截断）
+        marker = re.search(r"#\[cfg\(test\)\]\s*\n\s*(?:pub\s*(?:\(crate\)\s*)?)?mod\s+test", text)
+        if marker:
+            text = text[: marker.start()]
+        for m in RUST_KEY_RE.finditer(text):
+            key = m.group(1)
+            lineno = text.count("\n", 0, m.start()) + 1
+            used.setdefault(key, []).append(
+                f"{path.relative_to(wd)}:{lineno}"
+            )
+    return used
+
+
+def iter_js_files(wd: Path):
+    assets = wd / "zellij-client" / "assets"
+    if not assets.is_dir():
+        return
+    for path in sorted(assets.glob("*.js")):
+        name = path.name
+        if name in JS_EXCLUDE or name.startswith("addon-") or name.startswith("xterm"):
+            continue
+        yield path
+
+
+def extract_js_keys(wd: Path) -> dict:
+    used = {}
+    for path in iter_js_files(wd):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for call in JS_CALL_RE.finditer(line):
+                args = js_call_arg_text(line, call.end() - 1)
+                for m in JS_STR_RE.finditer(args):
+                    used.setdefault(m.group(2), []).append(
+                        f"{path.relative_to(wd)}:{lineno}"
+                    )
+    return used
+
+
+CONFIG_LABEL_RE = re.compile(r'(?:item|toggled_label)(?:\s+|=)"([^"]+)"')
+
+
+def extract_config_labels(wd: Path) -> dict:
+    """context-menu 等插件的用户可见标签来自内置 default.kdl。"""
+    used = {}
+    cfg = wd / "zellij-utils" / "assets" / "config" / "default.kdl"
+    if cfg.is_file():
+        for lineno, line in enumerate(cfg.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("//"):
+                continue
+            for m in CONFIG_LABEL_RE.finditer(line):
+                used.setdefault(m.group(1), []).append(
+                    f"{cfg.relative_to(wd)}:{lineno}"
+                )
+    return used
+
+
+def unescape_rust(s: str) -> str:
+    out = []
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and i + 1 < len(s):
+            n = s[i + 1]
+            if n == "\n":
+                # Rust 续行：反斜杠+换行会吞掉下一行的前导空白
+                i += 2
+                while i < len(s) and s[i] in " \t\n\r":
+                    i += 1
+                continue
+            mapping = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", '"': '"', "'": "'"}
+            if n in mapping:
+                out.append(mapping[n])
+                i += 2
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+# ── 上游更新检测 ──────────────────────────────────────────────────────────
+
+TAG_RE = re.compile(r"refs/tags/(v(\d+)\.(\d+)\.(\d+))\^\{\}$")
+
+
+def list_remote_tags(repo: str):
+    """返回 {tag: (commit, (major, minor, patch))}，按版本排序。"""
+    res = run(["git", "ls-remote", "--tags", repo], capture=True)
+    if res.returncode != 0:
+        raise SystemExit(f"无法查询上游标签：{res.stderr}")
+    tags = {}
+    for line in res.stdout.splitlines():
+        sha, _, ref = line.partition("\t")
+        m = TAG_RE.match(ref)
+        if m:
+            tags[m.group(1)] = (sha, tuple(int(g) for g in m.groups()[1:]))
+    return dict(sorted(tags.items(), key=lambda kv: kv[1][1]))
+
+
+def cmd_upstream_status(args) -> int:
+    up = load_upstream()
+    tags = list_remote_tags(up["repo"])
+    base_v = up["version"].lstrip("v")
+    base = tuple(int(x) for x in base_v.split("."))
+    rows = []
+    for tag, (sha, ver) in tags.items():
+        if ver < base:
+            continue
+        supported = (REPO_ROOT / "patches" / tag).is_dir()
+        mark = "基线" if tag == up["tag"] else ("已适配" if supported else "未适配")
+        rows.append({"tag": tag, "commit": sha, "status": mark})
+    if args.json:
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+    else:
+        for r in rows:
+            print(f"{r['tag']:<12} {r['status']}  {r['commit'][:12]}")
+    return 0
+
+
+def files_touched_by_patches(pdir: Path):
+    """补丁队列触及的文件（diff 头中的 +++/--- 路径）。"""
+    files = set()
+    for patch in sorted(pdir.glob("*.patch")):
+        for line in patch.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"^[+-]{3} [ab]/(.*)$", line)
+            if m and m.group(1) != "dev/null":
+                files.add(m.group(1))
+    return files
+
+
+CANDIDATE_RE = re.compile(r'"([A-Za-z][^"\\]{4,90})"')
+CANDIDATE_SKIP_RE = re.compile(r"[\{\}\\/:=@]|\b(http|file|wss?)\b")
+CANDIDATE_WORDS = re.compile(r"[a-z]+ [a-zA-Z]|[A-Z][a-z]+ [a-zA-Z]")
+
+
+def collect_candidates(wd: Path) -> dict:
+    """启发式收集“可能是界面文字”的英文字符串（用于版本间差异报告，
+    不是覆盖率统计，会产生误报/漏报）。"""
+    found = {}
+
+    def add(key, loc):
+        if " " not in key or CANDIDATE_SKIP_RE.search(key):
+            return
+        if not CANDIDATE_WORDS.search(key):
+            return
+        found.setdefault(key, loc)
+
+    for path in iter_rust_files(wd):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        marker = re.search(r"#\[cfg\(test\)\]\s*\n\s*(?:pub\s*(?:\(crate\)\s*)?)?mod\s+test", text)
+        if marker:
+            text = text[: marker.start()]
+        for m in CANDIDATE_RE.finditer(text):
+            add(m.group(1), str(path.relative_to(wd)))
+    for path in iter_js_files(wd):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for m in CANDIDATE_RE.finditer(text):
+            add(m.group(1), str(path.relative_to(wd)))
+    for key, locs in extract_config_labels(wd).items():
+        add(key, locs[0])
+    return found
+
+
+def crate_version(wd: Path, crate: str):
+    toml_path = wd / crate / "Cargo.toml"
+    if not toml_path.is_file():
+        return None
+    try:
+        with toml_path.open("rb") as f:
+            data = tomllib.load(f)
+    except tomllib.TOMLDecodeError:
+        return None
+    v = data.get("package", {}).get("version")
+    if v in (None, "", "workspace"):
+        root = wd / "Cargo.toml"
+        with root.open("rb") as f:
+            v = tomllib.load(f).get("workspace", {}).get("package", {}).get("version")
+    return v
+
+
+def cmd_probe(args) -> int:
+    """探测某个上游标签与当前补丁队列/译文的兼容性（只读，不构建）。"""
+    up = load_upstream()
+    tag = args.tag
+    base_commit = up["commit"]
+    base_wd = workdir(args)
+    pdir = patches_dir(up)
+    if not pdir.is_dir():
+        raise SystemExit(f"补丁目录不存在：{pdir}")
+
+    probe_wd = Path(args.probe_workdir or WORK_DIR / f"probe-{tag}").resolve()
+    probe_wd.parent.mkdir(parents=True, exist_ok=True)
+    if not (probe_wd / ".git").exists():
+        eprint(f">> 克隆 {tag} 到 {probe_wd}")
+        run(["git", "clone", "--depth", "1", "--branch", tag, up["repo"], str(probe_wd)])
+    else:
+        run(["git", "fetch", "--depth", "1", "origin", "tag", tag], cwd=probe_wd)
+    res = git("checkout", "-f", tag, cwd=probe_wd)
+    if res.returncode != 0:
+        raise SystemExit(f"无法检出 {tag}：{res.stderr}")
+    probe_commit = git("rev-parse", "HEAD", cwd=probe_wd).stdout.strip()
+
+    # 基线侧候选集：取基线提交到独立 worktree（不污染 zh-cn 分支）
+    base_tree = WORK_DIR / "probe-baseline"
+    res = git("fetch", "--depth", "1", "origin", base_commit, cwd=probe_wd)
+    if res.returncode != 0:
+        raise SystemExit(f"无法在探测仓库获取基线提交：{res.stderr}")
+    if base_tree.exists():
+        shutil.rmtree(base_tree)
+    res = git("worktree", "add", "--detach", str(base_tree), base_commit, cwd=probe_wd)
+    if res.returncode != 0:
+        raise SystemExit(f"无法建立基线 worktree：{res.stderr}")
+
+    try:
+        # 1) 补丁应用
+        ok, failed = [], []
+        with tempfile.TemporaryDirectory() as td:
+            env = dict(os.environ, GIT_INDEX_FILE=str(Path(td) / "index"))
+            git("read-tree", "HEAD", cwd=probe_wd, env=env)
+            for patch in sorted(pdir.glob("*.patch")):
+                r = git("apply", "--check", "--cached", str(patch), cwd=probe_wd, env=env)
+                if r.returncode == 0:
+                    ok.append(patch.name)
+                    git("apply", "--cached", str(patch), cwd=probe_wd, env=env)
+                else:
+                    failed.append(patch.name)
+
+        # 2) 补丁触及的文件在上游是否还在
+        touched = files_touched_by_patches(pdir)
+        created = set()
+        for patch in sorted(pdir.glob("*.patch")):
+            for m in re.finditer(r"^\+\+\+ b/(.*)$", patch.read_text(), re.M):
+                prev = git("show", f"{base_commit}:{m.group(1)}", cwd=base_wd)
+                if prev.returncode != 0:
+                    created.add(m.group(1))
+        missing_files = sorted(
+            f for f in touched - created if not (probe_wd / f).exists()
+        )
+
+        # 3) 接口版本差异
+        iface = {}
+        for crate in ("zellij-tile", "zellij-tile-utils", "zellij-utils",
+                      "zellij-server", "zellij-client"):
+            iface[crate] = {
+                "baseline": crate_version(base_tree, crate),
+                "probe": crate_version(probe_wd, crate),
+            }
+        assets_rs = probe_wd / "xtask" / "src" / "assets.rs"
+        iface["xtask-assets"] = {
+            "has_module_order": "MODULE_ORDER" in assets_rs.read_text() if assets_rs.is_file() else None,
+            "has_integrity": "integrity.json" in assets_rs.read_text() if assets_rs.is_file() else None,
+        }
+
+        # 4) 文案候选差异（启发式）
+        cand_base = collect_candidates(base_tree)
+        cand_probe = collect_candidates(probe_wd)
+        added = sorted(set(cand_probe) - set(cand_base))
+        removed = sorted(set(cand_base) - set(cand_probe))
+    finally:
+        git("worktree", "remove", "--force", str(base_tree), cwd=probe_wd)
+
+    report = {
+        "probe_tag": tag,
+        "probe_commit": probe_commit,
+        "baseline_commit": base_commit,
+        "patches_ok": ok,
+        "patches_failed": failed,
+        "missing_files": missing_files,
+        "interface_versions": iface,
+        "strings_added": added,
+        "strings_removed": removed,
+    }
+    out = probe_wd / "PROBE-REPORT.json"
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"探测 {tag}（{probe_commit[:12]}）对比基线 {base_commit[:12]}")
+        print(f"补丁应用：{len(ok)} 成功 / {len(failed)} 失败")
+        for f in failed:
+            print(f"  ✗ {f}")
+        if missing_files:
+            print(f"补丁触及但上游已删除的文件：{missing_files}")
+        for crate, vers in iface.items():
+            if isinstance(vers, dict) and "baseline" in vers and vers["baseline"] != vers["probe"]:
+                print(f"接口版本变化：{crate} {vers['baseline']} → {vers['probe']}")
+        print(f"文案候选差异（启发式，需人工盘点）：+{len(added)} / -{len(removed)}")
+        for s in added[:50]:
+            print(f"  + {s!r}（{cand_probe[s]}）")
+        if len(added) > 50:
+            print(f"  …其余 {len(added) - 50} 条见 {out}")
+        for s in removed[:20]:
+            print(f"  - {s!r}（原位于 {cand_base[s]}）")
+        print(f"报告已写入 {out}")
+    return 2 if failed or missing_files else 0
+
+
+def cmd_report(args) -> int:
+    up = load_upstream()
+    wd = workdir(args)
+    entries, errors = load_catalog()
+    if entries is None:
+        raise SystemExit("译文目录无法解析：" + "；".join(errors))
+
+    rust_keys = extract_rust_keys(wd)
+    js_keys = extract_js_keys(wd)
+    used = {}
+    for key, locs in rust_keys.items():
+        used.setdefault(unescape_rust(key), []).extend(locs)
+    for key, locs in js_keys.items():
+        used.setdefault(key.replace("\\'", "'").replace('\\"', '"'), []).extend(locs)
+    for key, locs in extract_config_labels(wd).items():
+        used.setdefault(key, []).extend(locs)
+
+    # 目录本身占位符问题（不参与退出码，validation 已单独报）
+    missing = sorted(k for k in used if k not in entries)
+    unused = sorted(k for k in entries if k not in used)
+    mismatches = []
+    for key in sorted(used):
+        if key in entries and placeholder_set(key) != placeholder_set(entries[key]):
+            mismatches.append(
+                {
+                    "key": key,
+                    "key_placeholders": sorted(placeholder_set(key)),
+                    "value_placeholders": sorted(placeholder_set(entries[key])),
+                    "locations": used[key],
+                }
+            )
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "missing_translations": missing,
+                    "unused_catalog_entries": unused,
+                    "placeholder_mismatches": mismatches,
+                    "used_key_count": len(used),
+                    "catalog_entry_count": len(entries),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        print(f"代码中使用键数：{len(used)}，目录条目数：{len(entries)}")
+        if missing:
+            print(f"\n警告：{len(missing)} 个键没有译文（运行时回退英文）：")
+            for k in missing:
+                locs = used[k]
+                print(f"  - {k!r}（{locs[0]}{' 等' if len(locs) > 1 else ''}）")
+        if unused:
+            print(f"\n{len(unused)} 个目录条目未被代码使用：")
+            for k in unused:
+                print(f"  - {k!r}")
+        if mismatches:
+            print(f"\n错误：{len(mismatches)} 个键占位符不一致：")
+            for m in mismatches:
+                print(
+                    f"  - {m['key']!r}：键 {m['key_placeholders']}，"
+                    f"译文 {m['value_placeholders']}（{m['locations'][0]}）"
+                )
+        if not missing and not unused and not mismatches:
+            print("目录与代码完全对应。")
+
+    return 1 if mismatches else 0
+
+
+# ── 生成器 ────────────────────────────────────────────────────────────────
+
+
+def rust_escape(s: str) -> str:
+    return (
+        s.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
+        .replace("\r", "\\r")
+    )
+
+
+def gen_rust_catalog(entries: dict, out: Path):
+    lines = [
+        "// Generated by tools/zhcn.py gen-rust from i18n/zh-CN.toml. Do not edit.",
+        "// Sorted by key for binary search.",
+        "pub(crate) static CATALOG: &[(&str, &str)] = &[",
+    ]
+    for key in sorted(entries):
+        lines.append(f'    ("{rust_escape(key)}", "{rust_escape(entries[key])}"),')
+    lines.append("];\n")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines), encoding="utf-8")
+
+
+def gen_web_i18n(entries: dict, web_keys: dict, out: Path):
+    template = WEB_I18N_TEMPLATE.read_text(encoding="utf-8")
+    catalog = {k: entries[k] for k in sorted(web_keys) if k in entries}
+    payload = json.dumps(catalog, ensure_ascii=False, indent=None, sort_keys=True)
+    if WEB_CATALOG_MARKER not in template:
+        raise SystemExit(f"i18n.js 模板缺少注入标记 {WEB_CATALOG_MARKER}")
+    result = template.replace(WEB_CATALOG_MARKER, payload)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(result, encoding="utf-8")
+
+
+def cmd_gen_rust(args) -> int:
+    entries = validate_catalog()
+    gen_rust_catalog(entries, Path(args.out))
+    eprint(f">> 已生成 {args.out}")
+    return 0
+
+
+def cmd_gen_web(args) -> int:
+    up = load_upstream()
+    wd = workdir(args)
+    entries = validate_catalog()
+    gen_web_i18n(entries, extract_js_keys(wd), Path(args.out))
+    eprint(f">> 已生成 {args.out}")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="zhcn.py", description=__doc__)
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    def add_workdir(p):
+        p.add_argument("--workdir", help=f"上游工作区（默认 {WORK_DIR / ZELLIJ_DIR_NAME}）")
+
+    p = sub.add_parser("fetch", help="获取上游源码并核对基线提交")
+    p.add_argument("--tag", help="覆盖 upstream.toml 的 tag")
+    p.add_argument("--commit", help="覆盖 upstream.toml 的 commit")
+    add_workdir(p)
+    p.set_defaults(fn=cmd_fetch)
+
+    p = sub.add_parser("check", help="校验基线、补丁与译文目录")
+    add_workdir(p)
+    p.set_defaults(fn=cmd_check)
+
+    p = sub.add_parser("apply", help="重置工作区并应用补丁、生成产物")
+    p.add_argument("--force", action="store_true",
+                   help="丢弃工作区未提交改动与 zh-cn 分支后重建")
+    add_workdir(p)
+    p.set_defaults(fn=cmd_apply)
+
+    p = sub.add_parser("build", help="check + apply + release 构建")
+    p.add_argument("--force", action="store_true",
+                   help="丢弃工作区未提交改动与 zh-cn 分支后重建")
+    add_workdir(p)
+    p.set_defaults(fn=cmd_build)
+
+    p = sub.add_parser("export-patches", help="导出 zh-cn 分支为补丁队列")
+    add_workdir(p)
+    p.set_defaults(fn=cmd_export_patches)
+
+    p = sub.add_parser("report", help="对比代码键与译文目录")
+    p.add_argument("--json", action="store_true", help="输出 JSON")
+    add_workdir(p)
+    p.set_defaults(fn=cmd_report)
+
+    p = sub.add_parser("gen-rust", help="生成 Rust 译文目录")
+    p.add_argument("--out", required=True, help="输出路径")
+
+    p = sub.add_parser("gen-web", help="生成网页 i18n.js")
+    p.add_argument("--out", required=True, help="输出路径")
+    add_workdir(p)
+
+    p = sub.add_parser("upstream-status", help="列出上游 ≥ 基线的标签及适配状态")
+    p.add_argument("--json", action="store_true", help="输出 JSON")
+    p.set_defaults(fn=cmd_upstream_status)
+
+    p = sub.add_parser("probe", help="探测某上游标签与补丁队列的兼容性（不构建）")
+    p.add_argument("--tag", required=True, help="上游标签，如 v0.45.1")
+    p.add_argument("--probe-workdir", help="探测工作区（默认 .work/probe-<tag>）")
+    p.add_argument("--json", action="store_true", help="输出 JSON")
+    add_workdir(p)
+    p.set_defaults(fn=cmd_probe)
+
+    args = parser.parse_args()
+    if args.cmd == "gen-rust":
+        return cmd_gen_rust(args)
+    if args.cmd == "gen-web":
+        return cmd_gen_web(args)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,640 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 14:28:35 +0800
+Subject: [PATCH 13/19] i18n: translate plugin-manager and layout-manager
+ plugins
+
+---
+ default-plugins/layout-manager/Cargo.toml     |  1 +
+ default-plugins/layout-manager/src/errors.rs  |  5 ++-
+ default-plugins/layout-manager/src/main.rs    |  5 ++-
+ .../src/screens/import_layout.rs              | 27 +++++++------
+ .../src/screens/layout_list/mod.rs            |  5 ++-
+ .../src/screens/layout_list/search.rs         |  5 ++-
+ .../src/screens/new_layout_from_session.rs    | 29 +++++++-------
+ .../src/screens/rename_layout.rs              |  3 +-
+ .../src/ui/layout_detail_view.rs              | 11 ++---
+ .../layout-manager/src/ui/layout_table.rs     |  9 +++--
+ .../src/ui/multi_line_error_message.rs        |  5 ++-
+ default-plugins/plugin-manager/Cargo.toml     |  1 +
+ default-plugins/plugin-manager/src/main.rs    | 40 ++++++++++---------
+ 13 files changed, 81 insertions(+), 65 deletions(-)
+
+diff --git a/default-plugins/layout-manager/Cargo.toml b/default-plugins/layout-manager/Cargo.toml
+index c6870b7..20183ac 100644
+--- a/default-plugins/layout-manager/Cargo.toml
++++ b/default-plugins/layout-manager/Cargo.toml
+@@ -7,6 +7,7 @@ license.workspace = true
+ 
+ [dependencies]
+ zellij-tile = { path = "../../zellij-tile" }
++zellij-i18n = { workspace = true }
+ miette = { workspace = true }
+ strip-ansi-escapes = { workspace = true }
+ unicode-width = { workspace = true }
+diff --git a/default-plugins/layout-manager/src/errors.rs b/default-plugins/layout-manager/src/errors.rs
+index ea64e76..a2d9f26 100644
+--- a/default-plugins/layout-manager/src/errors.rs
++++ b/default-plugins/layout-manager/src/errors.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::trf;
+ use crate::screens::{KeyResponse, Screen};
+ use crate::ui::{truncate_line_with_ansi, wrap_text_to_width, ErrorMessage, MultiLineErrorMessage};
+ use zellij_tile::prelude::*;
+@@ -82,7 +83,7 @@ impl ErrorDetailScreen {
+ 
+     pub fn render(&self, rows: usize, cols: usize) {
+         // Header: show layout name
+-        let header = format!("Error in layout: {}", self.layout_name);
++        let header = trf("Error in layout: {name}", &[("name", &self.layout_name)]);
+         let header_text = Text::from(header).error_color_all();
+         print_text_with_coordinates(header_text, 1, 0, None, None);
+ 
+@@ -127,7 +128,7 @@ impl ErrorDetailScreen {
+             }
+ 
+             // Render omission indicator
+-            let indicator = format!("... {} lines omitted ...", omitted_count);
++            let indicator = trf("... {count} lines omitted ...", &[("count", &omitted_count.to_string())]);
+             let indicator_text = Text::from(indicator.clone()).color_range(0, ..);
+             print_text_with_coordinates(
+                 indicator_text,
+diff --git a/default-plugins/layout-manager/src/main.rs b/default-plugins/layout-manager/src/main.rs
+index 789014a..107621a 100644
+--- a/default-plugins/layout-manager/src/main.rs
++++ b/default-plugins/layout-manager/src/main.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ mod errors;
+ mod screens;
+ mod ui;
+@@ -246,9 +247,9 @@ impl ZellijPlugin for State {
+                     let stringified_error = format_kdl_error(layout_error.error.clone());
+                     let error_message = match &layout_error.error {
+                         LayoutParsingError::KdlError { kdl_error, .. } => {
+-                            format!("Layout Error: {}", kdl_error.error_message)
++                            trf("Layout Error: {err}", &[("err", &kdl_error.error_message)])
+                         },
+-                        LayoutParsingError::SyntaxError => "KDL parsing error".to_owned(),
++                        LayoutParsingError::SyntaxError => tr("KDL parsing error").to_owned(),
+                     };
+ 
+                     display_layouts.push(DisplayLayout::Error {
+diff --git a/default-plugins/layout-manager/src/screens/import_layout.rs b/default-plugins/layout-manager/src/screens/import_layout.rs
+index ba887be..a4b7065 100644
+--- a/default-plugins/layout-manager/src/screens/import_layout.rs
++++ b/default-plugins/layout-manager/src/screens/import_layout.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use super::{KeyResponse, LayoutListScreen, OptimisticUpdate, Screen};
+ use crate::errors::{format_kdl_error, ErrorScreen};
+ use crate::ui::{truncate_with_ellipsis_start, LayoutDetail, Title};
+@@ -95,21 +96,21 @@ impl ImportLayoutScreen {
+         // Check if we have a pasted layout
+         let Some(pasted_text) = &self.pasted_text else {
+             return KeyResponse::new_screen(
+-                self.create_error_screen("Please paste a layout first"),
++                self.create_error_screen(tr("Please paste a layout first")),
+             );
+         };
+ 
+         // Check if the layout is valid
+         if self.parse_error.is_some() {
+             return KeyResponse::new_screen(
+-                self.create_error_screen("Cannot save an invalid layout"),
++                self.create_error_screen(tr("Cannot save an invalid layout")),
+             );
+         }
+ 
+         // Get the parsed metadata for optimistic update
+         let Some(metadata) = &self.parsed_metadata else {
+             return KeyResponse::new_screen(
+-                self.create_error_screen("Cannot save layout without metadata"),
++                self.create_error_screen(tr("Cannot save layout without metadata")),
+             );
+         };
+ 
+@@ -146,14 +147,14 @@ impl ImportLayoutScreen {
+ 
+     fn save_layout(&self, layout_name: &str, layout_content: &str) -> Result<(), String> {
+         save_layout(layout_name.to_owned(), layout_content.to_owned(), false)
+-            .map_err(|err| format!("Failed to save layout '{}': {}", layout_name, err))?;
++            .map_err(|err| trf("Failed to save layout '{name}': {err}", &[("name", &layout_name), ("err", &err.to_string())]))?;
+ 
+         eprintln!("Successfully imported layout: {}", layout_name);
+         Ok(())
+     }
+ 
+     fn description_text(&self) -> &str {
+-        "Paste your layout here."
++        tr("Paste your layout here.")
+     }
+ 
+     fn max_description_width(&self) -> usize {
+@@ -171,7 +172,7 @@ impl ImportLayoutScreen {
+         let cursor_pos = self.name_input.cursor_column();
+ 
+         let display_name = if input_text.is_empty() && !self.editing_name {
+-            "RANDOM"
++            tr("RANDOM")
+         } else {
+             input_text
+         };
+@@ -182,7 +183,7 @@ impl ImportLayoutScreen {
+             " (<r> Rename)" // Show rename hint when not editing
+         };
+ 
+-        let mut text = format!("Save as: {}{}", display_name, text_suffix);
++        let mut text = trf("Save as: {name}{suffix}", &[("name", &display_name), ("suffix", &text_suffix)]);
+         let mut cursor_position_in_line = 9 + cursor_pos;
+ 
+         if let Some(max_width) = max_width {
+@@ -192,7 +193,7 @@ impl ImportLayoutScreen {
+                     max_width
+                         .saturating_sub(9 + zellij_tile::graphemes::display_width(text_suffix)),
+                 );
+-                text = format!("Save as: {}{}", truncated_display_name, text_suffix);
++                text = trf("Save as: {name}{suffix}", &[("name", &truncated_display_name), ("suffix", &text_suffix)]);
+                 let truncated_len = zellij_tile::graphemes::display_width(&truncated_display_name);
+                 cursor_position_in_line = 9 + cursor_pos.min(truncated_len);
+             }
+@@ -209,7 +210,7 @@ impl ImportLayoutScreen {
+ 
+     fn help_text(&self) -> (&str, &[&str]) {
+         // Only Enter and Esc - NO <r> here (it's in the save-as line)
+-        ("<Enter> - Save, <Esc> - Back", &["<Enter>", "<Esc>"])
++        (tr("<Enter> - Save, <Esc> - Back"), &["<Enter>", "<Esc>"])
+     }
+ 
+     fn render_help_text(&self, x: usize, y: usize, _width: usize) {
+@@ -222,7 +223,7 @@ impl ImportLayoutScreen {
+     }
+ 
+     fn render_title(&self, x: usize, y: usize, width: usize) {
+-        let title = Text::from("Import Layout").color_all(2);
++        let title = Text::from(tr("Import Layout")).color_all(2);
+         print_text_with_coordinates(title, x, y, Some(width), None);
+     }
+ 
+@@ -278,7 +279,7 @@ impl ImportLayoutScreen {
+             self.render_help_text(base_x, help_y, actual_ui_width);
+         } else if let Some(error) = &self.parse_error {
+             // Show error if parse failed
+-            Title::new("Import Layout").render(0, 0);
++            Title::new(tr("Import Layout")).render(0, 0);
+             self.render_parse_error(error, 2);
+ 
+             let help_y = rows.saturating_sub(2);
+@@ -296,7 +297,7 @@ impl ImportLayoutScreen {
+             let base_y = rows.saturating_sub(actual_ui_height) / 2;
+             let base_x = cols.saturating_sub(actual_ui_width) / 2;
+ 
+-            Title::new("Import Layout").render(base_x, base_y);
++            Title::new(tr("Import Layout")).render(base_x, base_y);
+             self.render_description(base_x, base_y + 2, cols);
+ 
+             let help_y = base_y + 4;
+@@ -304,7 +305,7 @@ impl ImportLayoutScreen {
+         }
+     }
+     fn render_esc_cancel_help(&self, x: usize, y: usize) {
+-        let help_text = "<Esc> - Cancel";
++        let help_text = tr("<Esc> - Cancel");
+         let help_text = Text::from(help_text).color_substring(3, "<Esc>");
+         print_text_with_coordinates(help_text, x, y, None, None);
+     }
+diff --git a/default-plugins/layout-manager/src/screens/layout_list/mod.rs b/default-plugins/layout-manager/src/screens/layout_list/mod.rs
+index 980e5c9..1ee3bc3 100644
+--- a/default-plugins/layout-manager/src/screens/layout_list/mod.rs
++++ b/default-plugins/layout-manager/src/screens/layout_list/mod.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ mod search;
+ 
+ use super::{KeyResponse, OptimisticUpdate, Screen};
+@@ -230,7 +231,7 @@ impl LayoutListScreen {
+                 return_to_screen: Box::new(Screen::LayoutList(self.clone())),
+             }),
+             Err(error_msg) => Screen::Error(super::ErrorScreen {
+-                message: format!("Failed to dump session layout: {}", error_msg),
++                message: trf("Failed to dump session layout: {err}", &[("err", &error_msg)]),
+                 return_to_screen: Box::new(Screen::LayoutList(self.clone())),
+             }),
+         }
+@@ -485,7 +486,7 @@ impl LayoutListScreen {
+                 );
+             } else {
+                 // Render "No layout selected" message (moved from LayoutDetail)
+-                let msg = Text::from("No layout selected").color_all(2);
++                let msg = Text::from(tr("No layout selected")).color_all(2);
+                 print_text_with_coordinates(msg, detail_x + base_x, table_y, None, None);
+             }
+         }
+diff --git a/default-plugins/layout-manager/src/screens/layout_list/search.rs b/default-plugins/layout-manager/src/screens/layout_list/search.rs
+index 96a9edc..86a4dc9 100644
+--- a/default-plugins/layout-manager/src/screens/layout_list/search.rs
++++ b/default-plugins/layout-manager/src/screens/layout_list/search.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use crate::DisplayLayout;
+ use fuzzy_matcher::skim::SkimMatcherV2;
+ use fuzzy_matcher::FuzzyMatcher;
+@@ -164,13 +165,13 @@ impl SearchState {
+         let filter_text_str = self.filter_input.get_text();
+         let filter_text = if self.typing_filter {
+             let mut filter_line =
+-                Text::from(format!("Layout: {}", filter_text_str)).color_substring(2, "Layout:");
++                Text::from(trf("Layout: {filter}", &[("filter", &filter_text_str)])).color_substring(2, tr("Layout:"));
+             if !filter_text_str.is_empty() {
+                 filter_line = filter_line.color_last_substring(3, filter_text_str)
+             }
+             filter_line
+         } else {
+-            Text::from(format!("Layout: {} (<Esc> - clear)", filter_text_str))
++            Text::from(trf("Layout: {filter} (<Esc> - clear)", &[("filter", &filter_text_str)]))
+                 .color_substring(3, "<Esc>")
+                 .color_substring(2, "Layout:")
+         };
+diff --git a/default-plugins/layout-manager/src/screens/new_layout_from_session.rs b/default-plugins/layout-manager/src/screens/new_layout_from_session.rs
+index c1362c1..dabfc44 100644
+--- a/default-plugins/layout-manager/src/screens/new_layout_from_session.rs
++++ b/default-plugins/layout-manager/src/screens/new_layout_from_session.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use super::{ErrorScreen, KeyResponse, LayoutListScreen, OptimisticUpdate, Screen};
+ use crate::ui::{truncate_with_ellipsis_start, LayoutDetail};
+ use crate::DisplayLayout;
+@@ -94,11 +95,11 @@ impl NewLayoutFromCurrentSessionScreen {
+                     None
+                 },
+                 Ok((_, None)) => Some(Screen::Error(super::ErrorScreen {
+-                    message: "Failed to retrieve session layout metadata".to_string(),
++                    message: tr("Failed to retrieve session layout metadata").to_string(),
+                     return_to_screen: Box::new(Screen::LayoutList(Default::default())),
+                 })),
+                 Err(error_msg) => Some(Screen::Error(super::ErrorScreen {
+-                    message: format!("Failed to dump session layout: {}", error_msg),
++                    message: trf("Failed to dump session layout: {err}", &[("err", &error_msg)]),
+                     return_to_screen: Box::new(Default::default()),
+                 })),
+             }
+@@ -110,11 +111,11 @@ impl NewLayoutFromCurrentSessionScreen {
+                     None
+                 },
+                 Ok((_, None)) => Some(Screen::Error(super::ErrorScreen {
+-                    message: "Failed to retrieve session layout metadata".to_string(),
++                    message: tr("Failed to retrieve session layout metadata").to_string(),
+                     return_to_screen: Box::new(Screen::LayoutList(Default::default())),
+                 })),
+                 Err(error_msg) => Some(Screen::Error(super::ErrorScreen {
+-                    message: format!("Failed to dump session layout: {}", error_msg),
++                    message: trf("Failed to dump session layout: {err}", &[("err", &error_msg)]),
+                     return_to_screen: Box::new(Default::default()),
+                 })),
+             }
+@@ -163,7 +164,7 @@ impl NewLayoutFromCurrentSessionScreen {
+ 
+     fn save_session_layout(&self, layout_name: &str) -> Result<(), String> {
+         save_layout(layout_name.to_owned(), self.session_layout.clone(), false)
+-            .map_err(|err| format!("Failed to save layout '{}': {}", layout_name, err))?;
++            .map_err(|err| trf("Failed to save layout '{name}': {err}", &[("name", &layout_name), ("err", &err.to_string())]))?;
+ 
+         eprintln!(
+             "Successfully saved current session as layout: {}",
+@@ -224,20 +225,20 @@ impl NewLayoutFromCurrentSessionScreen {
+     }
+ 
+     fn render_title(&self, x: usize, y: usize, width: usize) {
+-        let title = Text::from("Save Layout of Current Session").color_all(2);
++        let title = Text::from(tr("Save Layout of Current Session")).color_all(2);
+         print_text_with_coordinates(title, x, y, Some(width), None);
+     }
+ 
+     fn description_text_full(&self) -> (&str, &str) {
+         (
+-            "This layout was created from the current session.",
+-            "Save it to recreate the session later or share it with others.",
++            tr("This layout was created from the current session."),
++            tr("Save it to recreate the session later or share it with others."),
+         )
+     }
+     fn description_text_short(&self) -> (&str, &str) {
+         (
+-            "Layout from current session.",
+-            "Save it to recreate or share the later.",
++            tr("Layout from current session."),
++            tr("Save it to recreate or share it later."),
+         )
+     }
+     fn render_description(&self, x: usize, y: usize, width: usize) {
+@@ -260,18 +261,18 @@ impl NewLayoutFromCurrentSessionScreen {
+         let cursor_pos = self.name_input.cursor_column();
+ 
+         let display_name = if input_text.is_empty() && !self.editing_name {
+-            "RANDOM"
++            tr("RANDOM")
+         } else {
+             input_text
+         };
+-        let mut text = format!("Save as: {} (<r> Rename)", display_name);
++        let mut text = trf("Save as: {name} (<r> Rename)", &[("name", &display_name)]);
+         let mut cursor_position_in_line = 9 + cursor_pos;
+         if zellij_tile::graphemes::display_width(&text) > width {
+             let truncated_display_name = truncate_with_ellipsis_start(
+                 display_name,
+                 width.saturating_sub(22), // size of text without the display name
+             );
+-            text = format!("Save as: {} (<r> Rename)", truncated_display_name);
++            text = trf("Save as: {name} (<r> Rename)", &[("name", &truncated_display_name)]);
+             let truncated_len = zellij_tile::graphemes::display_width(&truncated_display_name);
+             cursor_position_in_line = 9 + cursor_pos.min(truncated_len);
+         }
+@@ -286,7 +287,7 @@ impl NewLayoutFromCurrentSessionScreen {
+ 
+     fn render_tab_toggle(&self, x: usize, y: usize, width: usize) {
+         let text = if self.save_current_tab_only {
+-            "<Tab>  All Tabs  | [Current Tab Only]"
++            tr("<Tab>  All Tabs  | [Current Tab Only]")
+         } else {
+             "<Tab> [All Tabs] |  Current Tab Only"
+         };
+diff --git a/default-plugins/layout-manager/src/screens/rename_layout.rs b/default-plugins/layout-manager/src/screens/rename_layout.rs
+index 913a380..ac48ea0 100644
+--- a/default-plugins/layout-manager/src/screens/rename_layout.rs
++++ b/default-plugins/layout-manager/src/screens/rename_layout.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use super::{ErrorScreen, KeyResponse, LayoutListScreen, OptimisticUpdate, Screen};
+ use crate::ui::truncate_with_ellipsis_start;
+ use zellij_tile::prelude::*;
+@@ -109,7 +110,7 @@ impl RenameLayoutScreen {
+     }
+ 
+     fn render_title(&self, x: usize, y: usize, width: usize) {
+-        let title = Text::from("Rename Layout").color_all(2);
++        let title = Text::from(tr("Rename Layout")).color_all(2);
+         print_text_with_coordinates(title, x, y, Some(width), None);
+     }
+ 
+diff --git a/default-plugins/layout-manager/src/ui/layout_detail_view.rs b/default-plugins/layout-manager/src/ui/layout_detail_view.rs
+index e05c9db..fe13f20 100644
+--- a/default-plugins/layout-manager/src/ui/layout_detail_view.rs
++++ b/default-plugins/layout-manager/src/ui/layout_detail_view.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use super::text_utils::{get_layout_display_info, truncate_with_ellipsis, wrap_text_to_width};
+ use crate::DisplayLayout;
+ use zellij_tile::prelude::*;
+@@ -75,7 +76,7 @@ impl<'a> LayoutDetail<'a> {
+     }
+ 
+     fn render_no_metadata(&self, x: usize, y: usize) {
+-        let msg = Text::from("No metadata available").color_all(1);
++        let msg = Text::from(tr("No metadata available")).color_all(1);
+         print_text_with_coordinates(msg, x, y + 1, None, None);
+     }
+     fn render_built_in_indication(
+@@ -128,7 +129,7 @@ impl<'a> LayoutDetail<'a> {
+             current_y += 1;
+         }
+ 
+-        let hint = Text::from("<m> - Show detailed error").color_substring(3, "<m>");
++        let hint = Text::from(tr("<m> - Show detailed error")).color_substring(3, "<m>");
+         print_text_with_coordinates(hint, x, current_y + 1, None, None); // 1 for gap
+     }
+ 
+@@ -218,7 +219,7 @@ impl<'a> LayoutDetail<'a> {
+             let tab_label = if let Some(name) = &tab.name {
+                 name.clone()
+             } else {
+-                format!("Tab {}", i + 1)
++                trf("Tab {n}", &[("n", &(i + 1).to_string())])
+             };
+ 
+             // Account for "  - " prefix (4 characters)
+@@ -254,9 +255,9 @@ impl<'a> LayoutDetail<'a> {
+         // Add terminal count if any
+         if terminal_count > 0 {
+             let text = if named_panes.is_empty() {
+-                format!("  {} Terminals", terminal_count)
++                trf("  {count} Terminals", &[("count", &terminal_count.to_string())])
+             } else {
+-                format!("  +{} Terminals", terminal_count)
++                trf("  +{count} Terminals", &[("count", &terminal_count.to_string())])
+             };
+             let truncated_text = truncate_with_ellipsis(&text, max_width);
+             lines.push(truncated_text);
+diff --git a/default-plugins/layout-manager/src/ui/layout_table.rs b/default-plugins/layout-manager/src/ui/layout_table.rs
+index e44318b..8ae8fe7 100644
+--- a/default-plugins/layout-manager/src/ui/layout_table.rs
++++ b/default-plugins/layout-manager/src/ui/layout_table.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use super::text_utils::{
+     get_last_modified_string, get_layout_display_info, truncate_with_ellipsis,
+ };
+@@ -244,8 +245,8 @@ impl Controls {
+             "- <Alt+w> Override Session Layout, <?> {} options",
+             toggle_word
+         );
+-        let short_text = format!("<Alt+w> Override, <?> {} options", toggle_word);
+-        let minimum_text = format!("<Alt+w>/<?> ...");
++        let short_text = trf("<Alt+w> Override, <?> {word} options", &[("word", &toggle_word)]);
++        let minimum_text = format!("{}", tr("<Alt+w>/<?> ..."));
+         let text = if max_cols >= long_text.chars().count() {
+             long_text
+         } else if max_cols >= short_text.chars().count() {
+@@ -441,13 +442,13 @@ impl<'a> ErrorMessage<'a> {
+     }
+ 
+     pub fn render(&self, x: usize, y: usize) {
+-        let title = Text::from("Error").error_color_all();
++        let title = Text::from(tr("Error")).error_color_all();
+         print_text_with_coordinates(title, x, y, None, None);
+ 
+         let message = Text::from(self.message).error_color_all();
+         print_text_with_coordinates(message, x, y + 2, None, None);
+ 
+-        let help = Text::from("Press any key to continue");
++        let help = Text::from(tr("Press any key to continue"));
+         print_text_with_coordinates(help, x, y + 4, None, None);
+     }
+ }
+diff --git a/default-plugins/layout-manager/src/ui/multi_line_error_message.rs b/default-plugins/layout-manager/src/ui/multi_line_error_message.rs
+index da81603..53008a2 100644
+--- a/default-plugins/layout-manager/src/ui/multi_line_error_message.rs
++++ b/default-plugins/layout-manager/src/ui/multi_line_error_message.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use zellij_tile::prelude::*;
+ 
+ pub struct MultiLineErrorMessage {
+@@ -10,7 +11,7 @@ impl MultiLineErrorMessage {
+     }
+ 
+     pub fn render(&self, x: usize, y: usize, max_rows: usize) {
+-        let title = Text::from("Error").error_color_all();
++        let title = Text::from(tr("Error")).error_color_all();
+         print_text_with_coordinates(title, x, y, None, None);
+ 
+         let mut current_y = y + 2;
+@@ -20,7 +21,7 @@ impl MultiLineErrorMessage {
+             current_y += 1;
+         }
+ 
+-        let help = Text::from("Press any key to continue");
++        let help = Text::from(tr("Press any key to continue"));
+         print_text_with_coordinates(help, x, current_y + 2, None, None);
+     }
+ }
+diff --git a/default-plugins/plugin-manager/Cargo.toml b/default-plugins/plugin-manager/Cargo.toml
+index fc24733..e7483df 100644
+--- a/default-plugins/plugin-manager/Cargo.toml
++++ b/default-plugins/plugin-manager/Cargo.toml
+@@ -8,3 +8,4 @@ edition.workspace = true
+ uuid = { workspace = true }
+ fuzzy-matcher = { workspace = true }
+ zellij-tile = { path = "../../zellij-tile" }
++zellij-i18n = { workspace = true }
+diff --git a/default-plugins/plugin-manager/src/main.rs b/default-plugins/plugin-manager/src/main.rs
+index 0fbdcc1..6465d49 100644
+--- a/default-plugins/plugin-manager/src/main.rs
++++ b/default-plugins/plugin-manager/src/main.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use fuzzy_matcher::skim::SkimMatcherV2;
+ use fuzzy_matcher::FuzzyMatcher;
+ use uuid::Uuid;
+@@ -90,28 +91,29 @@ impl NewPluginScreen {
+         let url_field = if self.entering_plugin_url {
+             let truncated_url =
+                 truncate_string_start(&self.new_plugin_url, cols.saturating_sub(19)); // 17 the length of the prompt + 2 for padding and cursor
+-            let text = format!("Enter Plugin URL: {}_", truncated_url);
++            let text = trf("Enter Plugin URL: {url}_", &[("url", &truncated_url)]);
+             Text::from(text).color_range(2, ..=16).color_range(3, 18..)
+         } else {
+             let truncated_url =
+                 truncate_string_start(&self.new_plugin_url, cols.saturating_sub(18)); // 17 the length of the prompt + 1 for padding
+-            let text = format!("Enter Plugin URL: {}", truncated_url);
++            let text = trf("Enter Plugin URL: {url}", &[("url", &truncated_url)]);
+             Text::from(text).color_range(2, ..=16).color_range(0, 18..)
+         };
+         print_text_with_coordinates(url_field, 0, 2, None, None);
+         let url_helper =
+-            NestedListItem::new(Text::from("<Ctrl f> - Load from Disk").color_range(3, ..=8));
++            NestedListItem::new(Text::from(tr("<Ctrl f> - Load from Disk")).color_range(3, ..=8));
+         print_nested_list_with_coordinates(vec![url_helper], 0, 3, None, None);
+     }
+     fn render_configuration_title(&self) {
+         let configuration_title =
+             if !self.editing_configuration() && self.new_plugin_config.is_empty() {
+-                Text::from(format!("Plugin Configuration: <TAB> - Edit"))
++                Text::from(format!("{}", tr("Plugin Configuration: <TAB> - Edit")))
+                     .color_range(2, ..=20)
+                     .color_range(3, 22..=26)
+             } else if !self.editing_configuration() {
+                 Text::from(format!(
+-                    "Plugin Configuration: <TAB> - Edit, <↓↑> - Navigate, <Del> - Delete"
++                    "{}",
++                    tr("Plugin Configuration: <TAB> - Edit, <↓↑> - Navigate, <Del> - Delete")
+                 ))
+                 .color_range(2, ..=20)
+                 .color_range(3, 22..=26)
+@@ -119,7 +121,8 @@ impl NewPluginScreen {
+                 .color_range(3, 53..=57)
+             } else {
+                 Text::from(format!(
+-                    "Plugin Configuration: [Editing: <TAB> - Next, <ENTER> - Accept]"
++                    "{}",
++                    tr("Plugin Configuration: [Editing: <TAB> - Next, <ENTER> - Accept]")
+                 ))
+                 .color_range(2, ..=20)
+                 .color_range(3, 32..=36)
+@@ -151,7 +154,7 @@ impl NewPluginScreen {
+             ));
+         } else if items.is_empty() {
+             items.push(NestedListItem::new(
+-                Text::from("<NO CONFIGURATION>").color_range(0, ..),
++                Text::from(tr("<NO CONFIGURATION>")).color_range(0, ..),
+             ));
+         }
+         let config_list_len = items.len();
+@@ -283,9 +286,9 @@ impl NewPluginScreen {
+             key_shortcuts_text_len + 1,
+             bg_color
+         );
+-        let load_in_background_text = format!("Load in Background");
++        let load_in_background_text = format!("{}", tr("Load in Background"));
+         let load_in_background_text_len = load_in_background_text.len();
+-        let load_in_foreground_text = format!("Load in Foreground");
++        let load_in_foreground_text = format!("{}", tr("Load in Foreground"));
+         let (load_in_background_ribbon, load_in_foreground_ribbon) = if self.load_in_background {
+             (
+                 Text::from(load_in_background_text).selected(),
+@@ -314,7 +317,8 @@ impl NewPluginScreen {
+     }
+     fn render_help(&self, rows: usize) {
+         let enter_line = Text::from(format!(
+-            "Help: <ENTER> - Accept and Load Plugin, <ESC> - Cancel"
++            "{}",
++            tr("Help: <ENTER> - Accept and Load Plugin, <ESC> - Cancel")
+         ))
+         .color_range(3, 6..=12)
+         .color_range(3, 40..=44);
+@@ -709,14 +713,14 @@ impl State {
+         }
+     }
+     pub fn render_search(&self, cols: usize) {
+-        let text = format!(" SEARCH: {}_", self.search_term);
++        let text = trf(" SEARCH: {term}_", &[("term", &self.search_term)]);
+         if graphemes::display_width(&text) <= cols {
+             let text = Text::from(text).color_range(3, 9..);
+             print_text_with_coordinates(text, 0, 0, None, None);
+         } else {
+             let truncated_search_term =
+                 truncate_string_start(&self.search_term, cols.saturating_sub(10)); // 9 the length of the SEARCH prompt + 1 for the cursor
+-            let text = format!(" SEARCH: {}_", truncated_search_term);
++            let text = trf(" SEARCH: {term}_", &[("term", &truncated_search_term)]);
+             let text = Text::from(text).color_range(3, 9..);
+             print_text_with_coordinates(text, 0, 0, None, None);
+         }
+@@ -747,7 +751,7 @@ impl State {
+             items.push(tab_line);
+             if !plugin_info.configuration.is_empty() {
+                 let config_line = NestedListItem::new(
+-                    Text::from(format!("Configuration:")).color_range(2, ..=13),
++                    Text::from(format!("{}", tr("Configuration:"))).color_range(2, ..=13),
+                 )
+                 .indent(1);
+                 items.push(config_line);
+@@ -825,7 +829,7 @@ impl State {
+             items.push(tab_line);
+             if !plugin_info.configuration.is_empty() {
+                 let config_line = NestedListItem::new(
+-                    Text::from(format!("Configuration:")).color_range(2, ..=13),
++                    Text::from(format!("{}", tr("Configuration:"))).color_range(2, ..=13),
+                 )
+                 .indent(1);
+                 items.push(config_line);
+@@ -878,17 +882,17 @@ impl State {
+             };
+ 
+         let tab_line = NestedListItem::new(
+-            Text::from(format!("Tab: {}", tab_of_plugin_id)).color_range(2, ..=3),
++            Text::from(trf("Tab: {tab}", &[("tab", &tab_of_plugin_id.to_string())])).color_range(2, ..=3),
+         )
+         .indent(1);
+         tab_line
+     }
+     pub fn render_help(&self, y: usize, cols: usize) {
+-        let full_text = "Help: <←↓↑→> - Navigate/Expand, <ENTER> - focus, <TAB> - Reload, <Del> - Close, <Ctrl a> - New, <ESC> - Exit";
++        let full_text = tr("Help: <←↓↑→> - Navigate/Expand, <ENTER> - focus, <TAB> - Reload, <Del> - Close, <Ctrl a> - New, <ESC> - Exit");
+         let middle_text =
+-            "Help: <←↓↑→/ENTER> - Navigate, <TAB> - Reload, <Del> - Close, <Ctrl a> - New, <ESC> - Exit";
++            tr("Help: <←↓↑→/ENTER> - Navigate, <TAB> - Reload, <Del> - Close, <Ctrl a> - New, <ESC> - Exit");
+         let short_text =
+-            "<←↓↑→/ENTER/TAB/Del> - Navigate/Expand/Reload/Close, <Ctrl a> - New, <ESC> - Exit";
++            tr("<←↓↑→/ENTER/TAB/Del> - Navigate/Expand/Reload/Close, <Ctrl a> - New, <ESC> - Exit");
+         if cols >= full_text.chars().count() {
+             let text = Text::from(full_text)
+                 .color_range(3, 5..=11)

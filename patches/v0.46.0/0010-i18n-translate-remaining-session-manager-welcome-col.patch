@@ -1,0 +1,266 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 13:53:40 +0800
+Subject: [PATCH 10/19] i18n: translate remaining session-manager welcome,
+ column and hint strings
+
+---
+ default-plugins/session-manager/src/main.rs   | 23 +++---
+ default-plugins/session-manager/src/panel.rs  | 22 +++---
+ .../session-manager/src/ui/components.rs      | 71 ++++++++++---------
+ 3 files changed, 59 insertions(+), 57 deletions(-)
+
+diff --git a/default-plugins/session-manager/src/main.rs b/default-plugins/session-manager/src/main.rs
+index 3e01390..f89ee37 100644
+--- a/default-plugins/session-manager/src/main.rs
++++ b/default-plugins/session-manager/src/main.rs
+@@ -132,7 +132,6 @@ fn reminder_context(mode_info: &ModeInfo) -> desktop_integration::ReminderContex
+     }
+ }
+ 
+-const WELCOME_TEXT: &str = "Enter a session name to create it, attach to it if it's running or resurrect it if it's exited.";
+ 
+ register_plugin!(State);
+ 
+@@ -861,7 +860,7 @@ impl State {
+         }
+         let content_width = std::cmp::min(list_cols, 90);
+         let x = list_cols.saturating_sub(content_width) / 2;
+-        let lines = wrap_words(WELCOME_TEXT, content_width.max(10));
++        let lines = wrap_words(tr("Enter a session name to create it, attach to it if it's running or resurrect it if it's exited."), content_width.max(10));
+         for (index, line) in lines.iter().enumerate() {
+             print_text_with_coordinates(
+                 Text::from(line.as_str()).color_range(2, ..),
+@@ -2901,11 +2900,11 @@ impl State {
+     }
+     fn window_label(&self, target: &OpenTarget) -> &'static str {
+         match (target.name.as_deref(), target.exists, target.running) {
+-            (Some(name), true, true) if self.selected_has_window(name) => "go to its window",
+-            (_, true, true) => "open it in a window",
+-            (_, true, false) => "resurrect it in a window",
+-            (Some(_), false, _) => "create it in a window",
+-            (None, _, _) => "new session in a window",
++            (Some(name), true, true) if self.selected_has_window(name) => tr("go to its window"),
++            (_, true, true) => tr("open it in a window"),
++            (_, true, false) => tr("resurrect it in a window"),
++            (Some(_), false, _) => tr("create it in a window"),
++            (None, _, _) => tr("new session in a window"),
+         }
+     }
+     fn open_way_hints(&self, target: Option<&OpenTarget>, inbox: bool) -> Vec<help::Hint> {
+@@ -2927,11 +2926,11 @@ impl State {
+             hints.push(help::hint(
+                 "<Alt x>",
+                 if inbox {
+-                    "go there, disconnect others"
++                    tr("go there, disconnect others")
+                 } else if target.is_here() {
+-                    "disconnect others from this session"
++                    tr("disconnect others from this session")
+                 } else {
+-                    "open here, disconnect others"
++                    tr("open here, disconnect others")
+                 },
+             ));
+         }
+@@ -3852,8 +3851,8 @@ impl State {
+     fn follow_app_panel_title(&self) {
+         if app_panel::is_enabled() && !self.app_quit {
+             self.set_app_panel_title(match self.inbox.tab {
+-                BrowserTab::Inbox if !self.attention_disabled() => "Inbox",
+-                _ => "Sessions",
++                BrowserTab::Inbox if !self.attention_disabled() => tr("Inbox"),
++                _ => tr("Sessions"),
+             });
+         }
+     }
+diff --git a/default-plugins/session-manager/src/panel.rs b/default-plugins/session-manager/src/panel.rs
+index 27ed549..749d3bb 100644
+--- a/default-plugins/session-manager/src/panel.rs
++++ b/default-plugins/session-manager/src/panel.rs
+@@ -556,12 +556,12 @@ struct CardColumn {
+ fn card_columns(columns: &[SessionSuggestionColumn]) -> Vec<CardColumn> {
+     let mut result = vec![CardColumn {
+         fact: "directory".to_owned(),
+-        title: "Folder",
++        title: tr("Folder"),
+         is_custom: false,
+     }];
+     result.push(CardColumn {
+         fact: "git_branch".to_owned(),
+-        title: "Branch",
++        title: tr("Branch"),
+         is_custom: false,
+     });
+     for column in columns {
+@@ -838,21 +838,21 @@ pub fn render_session_tree(
+         .map(|r| graphemes::display_width(&folder_text(&r.session_name)))
+         .max()
+         .unwrap_or(0)
+-        .max(graphemes::display_width(&"Folder"));
++        .max(graphemes::display_width(&tr("Folder")));
+     let branch_width = cache
+         .rows
+         .iter()
+         .map(|r| graphemes::display_width(&branch_text(&r.session_name)))
+         .max()
+         .unwrap_or(0)
+-        .max(graphemes::display_width(&"Branch"));
++        .max(graphemes::display_width(&tr("Branch")));
+     let total_session_width = name_width + 2 + folder_width + 2 + branch_width;
+     let abbreviate = total_session_width + 2 + 24 + 3 > max_cols;
+     let header_x = x + 3 + name_width + 2;
+ 
+-    print_text_with_coordinates(Text::from("Folder").dim_all(), header_x, y, None, None);
++    print_text_with_coordinates(Text::from(tr("Folder")).dim_all(), header_x, y, None, None);
+     print_text_with_coordinates(
+-        Text::from("Branch").dim_all(),
++        Text::from(tr("Branch")).dim_all(),
+         header_x + folder_width + 2,
+         y,
+         None,
+@@ -960,11 +960,11 @@ pub fn render_session_tree(
+                     .and_then(|tabs| tabs.get(tab_index));
+                 let name = tab.map(|t| t.name.clone()).unwrap_or_default();
+                 let pane_count = tab.map(|t| t.panes.len()).unwrap_or(0);
+-                let suffix = format!(
+-                    " ({} {})",
+-                    pane_count,
+-                    if pane_count == 1 { "pane" } else { "panes" }
+-                );
++                let suffix = if pane_count == 1 {
++                    trf(" ({count} pane)", &[("count", pane_count.to_string().as_str())])
++                } else {
++                    trf(" ({count} panes)", &[("count", pane_count.to_string().as_str())])
++                };
+                 let active = tab.map(|t| t.active).unwrap_or(false);
+                 let status = top_status(
+                     attention
+diff --git a/default-plugins/session-manager/src/ui/components.rs b/default-plugins/session-manager/src/ui/components.rs
+index 6f04cdd..c365393 100644
+--- a/default-plugins/session-manager/src/ui/components.rs
++++ b/default-plugins/session-manager/src/ui/components.rs
+@@ -77,49 +77,52 @@ impl UnifiedResultsRenderCache {
+                     pane_count,
+                     ..
+                 } => {
+-                    let client_word = if *connected_users == 1 {
+-                        "client"
+-                    } else {
+-                        "clients"
+-                    };
+-
+                     let tab_str = format!("{}", tab_count);
+                     let pane_str = format!("{}", pane_count);
+                     let conn_str = format!("{}", connected_users);
+ 
+                     // Full details
+-                    let full_details = format!(
+-                        "{} tabs, {} panes, {} {}",
+-                        tab_str, pane_str, conn_str, client_word
+-                    );
++                    let details_args = [
++                        ("tabs", tab_str.as_str()),
++                        ("panes", pane_str.as_str()),
++                        ("conn", conn_str.as_str()),
++                    ];
++                    let full_details = if *connected_users == 1 {
++                        trf("{tabs} tabs, {panes} panes, {conn} client", &details_args)
++                    } else {
++                        trf("{tabs} tabs, {panes} panes, {conn} clients", &details_args)
++                    };
+                     let full_details_ranges = {
+-                        let tab_end = tab_str.len();
+-                        let pane_offset = tab_str.len() + " tabs, ".len();
+-                        let pane_end = pane_offset + pane_str.len();
+-                        let conn_offset = pane_end + " panes, ".len();
+-                        let conn_end = conn_offset + conn_str.len();
++                        let at = |needle: &str| {
++                            full_details
++                                .find(needle)
++                                .map(|s| s..s + needle.chars().count())
++                                .unwrap_or(0..0)
++                        };
+                         DetailsColorRanges {
+                             ranges: vec![
+-                                (1, 0..tab_end),
+-                                (2, pane_offset..pane_end),
+-                                (2, conn_offset..conn_end),
++                                (1, at(&tab_str)),
++                                (2, at(&pane_str)),
++                                (2, at(&conn_str)),
+                             ],
+                         }
+                     };
+ 
+                     // Abbreviated details
+-                    let abbr_details = format!("{}t, {}p, {}c", tab_str, pane_str, conn_str);
++                    let abbr_details =
++                        trf("{tabs}t, {panes}p, {conn}c", &details_args);
+                     let abbr_details_ranges = {
+-                        let tab_end = tab_str.len();
+-                        let pane_offset = tab_str.len() + "t, ".len();
+-                        let pane_end = pane_offset + pane_str.len();
+-                        let conn_offset = pane_end + "p, ".len();
+-                        let conn_end = conn_offset + conn_str.len();
++                        let at = |needle: &str| {
++                            abbr_details
++                                .find(needle)
++                                .map(|s| s..s + needle.chars().count())
++                                .unwrap_or(0..0)
++                        };
+                         DetailsColorRanges {
+                             ranges: vec![
+-                                (1, 0..tab_end),
+-                                (2, pane_offset..pane_end),
+-                                (2, conn_offset..conn_end),
++                                (1, at(&tab_str)),
++                                (2, at(&pane_str)),
++                                (2, at(&conn_str)),
+                             ],
+                         }
+                     };
+@@ -752,9 +755,9 @@ pub fn render_single_screen_prompt(
+     x: usize,
+     y: usize,
+ ) {
+-    let prompt = colors.session_name_prompt("Session:");
++    let prompt = colors.session_name_prompt(tr("Session:"));
+     let search_term_display = colors.bold(&format!("{}_", search_term));
+-    let mut used = "Session: ".chars().count() + search_term.chars().count() + 1;
++    let mut used = tr("Session: ").chars().count() + search_term.chars().count() + 1;
+     let mut enter_hint = match enter_action {
+         Some(action) => {
+             let enter_key = colors.shortcuts("<ENTER>");
+@@ -858,15 +861,15 @@ fn render_new_session_folder_prompt(
+     match new_session_info.new_session_folder.as_ref() {
+         Some(new_session_folder) => {
+             let folder_prompt = tr("New session folder:");
+-            let short_folder_prompt = "Folder:";
++            let short_folder_prompt = tr("Folder:");
+             let new_session_path = new_session_folder.clone();
+             let new_session_folder = new_session_folder.display().to_string();
+             let change_folder_shortcut_text = "<Ctrl f>";
+             let change_folder_shortcut = colors.shortcuts(&change_folder_shortcut_text);
+-            let to_change = "to change";
++            let to_change = tr("to change");
+             let reset_folder_shortcut_text = "<Ctrl c>";
+             let reset_folder_shortcut = colors.shortcuts(reset_folder_shortcut_text);
+-            let to_reset = "to reset";
++            let to_reset = tr("to reset");
+             if max_cols
+                 >= graphemes::display_width(&folder_prompt)
+                     + graphemes::display_width(&new_session_folder)
+@@ -942,10 +945,10 @@ fn render_new_session_folder_prompt(
+         },
+         None => {
+             let folder_prompt = tr("New session folder:");
+-            let short_folder_prompt = "Folder:";
++            let short_folder_prompt = tr("Folder:");
+             let change_folder_shortcut_text = "<Ctrl f>";
+             let change_folder_shortcut = colors.shortcuts(change_folder_shortcut_text);
+-            let to_set = "to set";
++            let to_set = tr("to set");
+ 
+             if max_cols
+                 >= graphemes::display_width(&folder_prompt)

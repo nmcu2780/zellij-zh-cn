@@ -1,0 +1,1281 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
+Date: Tue, 17 Nov 2026 13:44:57 +0800
+Subject: [PATCH 09/19] i18n: translate share, prompt, multiple-select and
+ strider plugins
+
+Translate all user-visible text. Share plugin consts become functions so
+tr() can run at display time; long/short hint variants keep the upstream
+width-based selection. Multiple-select keeps key names and translates the
+descriptions. Strider help lines and prompt form validation messages are
+wrapped at display points only.
+---
+ Cargo.lock                                    |   5 +
+ default-plugins/multiple-select/Cargo.toml    |   1 +
+ default-plugins/multiple-select/src/main.rs   |  26 ++-
+ default-plugins/prompt/Cargo.toml             |   1 +
+ default-plugins/prompt/src/form.rs            |   3 +-
+ default-plugins/prompt/src/main.rs            |   1 +
+ default-plugins/prompt/src/outcome.rs         |   3 +-
+ default-plugins/prompt/src/ui.rs              |  15 +-
+ default-plugins/share/Cargo.toml              |   1 +
+ default-plugins/share/src/main.rs             |  14 +-
+ default-plugins/share/src/main_screen.rs      |  41 ++--
+ .../share/src/token_management_screen.rs      |  38 ++--
+ default-plugins/share/src/token_screen.rs     |  59 +++--
+ default-plugins/share/src/ui_components.rs    | 205 +++++++++++-------
+ default-plugins/strider/Cargo.toml            |   1 +
+ default-plugins/strider/src/file_list_view.rs |   1 +
+ default-plugins/strider/src/main.rs           |   1 +
+ default-plugins/strider/src/platform.rs       |   5 +-
+ default-plugins/strider/src/search_view.rs    |   1 +
+ default-plugins/strider/src/shared.rs         |  34 +--
+ default-plugins/strider/src/state.rs          |   1 +
+ 21 files changed, 287 insertions(+), 170 deletions(-)
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 27f2b1e..473f3e0 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -2842,6 +2842,7 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+ name = "multiple-select"
+ version = "0.1.0"
+ dependencies = [
++ "zellij-i18n",
+  "zellij-tile",
+ ]
+ 
+@@ -3753,6 +3754,7 @@ version = "0.1.0"
+ dependencies = [
+  "regex",
+  "serde_json",
++ "zellij-i18n",
+  "zellij-tile",
+  "zellij-utils",
+ ]
+@@ -4372,6 +4374,7 @@ dependencies = [
+  "humantime",
+  "unicode-width 0.2.2",
+  "uuid",
++ "zellij-i18n",
+  "zellij-tile",
+ ]
+ 
+@@ -4402,6 +4405,7 @@ name = "share"
+ version = "0.1.0"
+ dependencies = [
+  "url",
++ "zellij-i18n",
+  "zellij-tile",
+ ]
+ 
+@@ -4640,6 +4644,7 @@ dependencies = [
+  "fuzzy-matcher",
+  "pretty-bytes",
+  "unicode-width 0.2.2",
++ "zellij-i18n",
+  "zellij-tile",
+ ]
+ 
+diff --git a/default-plugins/multiple-select/Cargo.toml b/default-plugins/multiple-select/Cargo.toml
+index d02ace9..e9f2a0c 100644
+--- a/default-plugins/multiple-select/Cargo.toml
++++ b/default-plugins/multiple-select/Cargo.toml
+@@ -6,4 +6,5 @@ edition.workspace = true
+ license.workspace = true
+ 
+ [dependencies]
++zellij-i18n = { workspace = true }
+ zellij-tile = { path = "../../zellij-tile" }
+diff --git a/default-plugins/multiple-select/src/main.rs b/default-plugins/multiple-select/src/main.rs
+index 1eac9ae..f71aa36 100644
+--- a/default-plugins/multiple-select/src/main.rs
++++ b/default-plugins/multiple-select/src/main.rs
+@@ -1,4 +1,5 @@
+ use std::collections::BTreeMap;
++use zellij_i18n::{tr, trf};
+ use std::time::Instant;
+ use zellij_tile::prelude::actions::Action;
+ use zellij_tile::prelude::*;
+@@ -105,13 +106,13 @@ impl App {
+     }
+ 
+     fn render_no_panes_message(&self, rows: usize, cols: usize) {
+-        let message = "PANES SELECTED FOR OTHER CLIENT";
++        let message = tr("PANES SELECTED FOR OTHER CLIENT");
+         let message_component = Text::from(message).color_all(2);
+         let base_x = cols.saturating_sub(message.len()) / 2;
+         let base_y = rows / 2;
+         print_text_with_coordinates(message_component, base_x, base_y, None, None);
+ 
+-        let esc_message = "<ESC> - close";
++        let esc_message = tr("<ESC> - close");
+         let esc_message_component = Text::from(esc_message).color_substring(3, "<ESC>");
+         let esc_base_x = cols.saturating_sub(esc_message.len()) / 2;
+         let esc_base_y = base_y + 2;
+@@ -119,7 +120,7 @@ impl App {
+     }
+ 
+     fn header_text() -> (&'static str, Text) {
+-        let header_text = "<ESC> - cancel, <TAB> - move";
++        let header_text = tr("<ESC> - cancel, <TAB> - move");
+         let header_text_component = Text::from(header_text)
+             .color_substring(3, "<ESC>")
+             .color_substring(3, "<TAB>");
+@@ -141,7 +142,7 @@ impl App {
+ 
+     fn group_actions_text(&self) -> Text {
+         let count_text = if self.grouped_panes_count == 1 {
+-            format!("GROUP ACTIONS ({} SELECTED PANE)", self.grouped_panes_count)
++            trf("GROUP ACTIONS ({count} SELECTED PANES)", &[("count", self.grouped_panes_count.to_string().as_str())])
+         } else {
+             format!(
+                 "GROUP ACTIONS ({} SELECTED PANES)",
+@@ -153,7 +154,7 @@ impl App {
+     }
+ 
+     fn shortcuts_line1_text() -> (&'static str, Text) {
+-        let text = "<b> - break out, <s> - stack, <c> - close";
++        let text = tr("<b> - break out, <s> - stack, <c> - close");
+         let component = Text::from(text)
+             .color_substring(3, "<b>")
+             .color_substring(3, "<s>")
+@@ -162,7 +163,7 @@ impl App {
+     }
+ 
+     fn shortcuts_line2_text() -> (&'static str, Text) {
+-        let text = "<l> - break left, <r> - break right";
++        let text = tr("<l> - break left, <r> - break right");
+         let component = Text::from(text)
+             .color_substring(3, "<l>")
+             .color_substring(3, "<r>");
+@@ -170,7 +171,7 @@ impl App {
+     }
+ 
+     fn shortcuts_line3_text() -> (&'static str, Text) {
+-        let text = "<e> - embed, <f> - float";
++        let text = tr("<e> - embed, <f> - float");
+         let component = Text::from(text)
+             .color_substring(3, "<e>")
+             .color_substring(3, "<f>");
+@@ -268,7 +269,7 @@ impl App {
+         self.grouped_panes_count = count;
+         if let Some(own_plugin_id) = self.own_plugin_id {
+             if previous_count != count {
+-                rename_plugin_pane(own_plugin_id, "Multiple Pane Select".to_string());
++                rename_plugin_pane(own_plugin_id, tr("Multiple Pane Select").to_string());
+             }
+             if previous_count != 0 && count != 0 && previous_count != count {
+                 if self.doherty_threshold_elapsed_since_highlight() {
+@@ -560,12 +561,12 @@ fn group_controls_length(mode_info: &ModeInfo) -> usize {
+     }
+ 
+     if pane_group_bound {
+-        let toggle_text = format!("<{}> Toggle", pane_group_key);
++        let toggle_text = trf("<{key}> Toggle", &[("key", pane_group_key.as_str())]);
+         length += zellij_tile::graphemes::display_width(&toggle_text) + 4;
+     }
+ 
+     if group_mark_bound {
+-        let follow_text = format!("<{}> Follow Focus", group_mark_key);
++        let follow_text = trf("<{key}> Follow Focus", &[("key", group_mark_key.as_str())]);
+         length += zellij_tile::graphemes::display_width(&follow_text) + 4;
+     }
+ 
+@@ -667,7 +668,7 @@ fn render_follow_focus_ribbon(
+     base_y: usize,
+     mode_info: &ModeInfo,
+ ) {
+-    let follow_text = format!("<{}> Follow Focus", group_mark_key);
++    let follow_text = trf("<{key}> Follow Focus", &[("key", group_mark_key)]);
+     let key_highlight = format!("{}", group_mark_key);
+ 
+     let mut ribbon = Text::from(follow_text).color_substring(0, &key_highlight);
+@@ -680,7 +681,7 @@ fn render_follow_focus_ribbon(
+ }
+ 
+ fn render_toggle_group_ribbon(pane_group_key: &str, base_x: usize, base_y: usize) -> usize {
+-    let toggle_text = format!("<{}> Toggle", pane_group_key);
++    let toggle_text = trf("<{key}> Toggle", &[("key", pane_group_key)]);
+     let toggle_text_len = toggle_text.len();
+     let key_highlight = format!("{}", pane_group_key);
+ 
+@@ -694,3 +695,4 @@ fn render_toggle_group_ribbon(pane_group_key: &str, base_x: usize, base_y: usize
+ 
+     base_x + toggle_text_len + 4
+ }
++
+diff --git a/default-plugins/prompt/Cargo.toml b/default-plugins/prompt/Cargo.toml
+index 90b6e5f..00bb7a7 100644
+--- a/default-plugins/prompt/Cargo.toml
++++ b/default-plugins/prompt/Cargo.toml
+@@ -6,6 +6,7 @@ edition.workspace = true
+ license.workspace = true
+ 
+ [dependencies]
++zellij-i18n = { workspace = true }
+ zellij-tile = { path = "../../zellij-tile" }
+ serde_json = { workspace = true }
+ regex = { workspace = true }
+diff --git a/default-plugins/prompt/src/form.rs b/default-plugins/prompt/src/form.rs
+index d7b156b..7e6afad 100644
+--- a/default-plugins/prompt/src/form.rs
++++ b/default-plugins/prompt/src/form.rs
+@@ -1,4 +1,5 @@
+ use serde_json::{Map, Value};
++use zellij_i18n::tr;
+ use zellij_tile::prelude::*;
+ use zellij_utils::prompt::{FormField, FormFieldKind, FormSpec};
+ 
+@@ -262,7 +263,7 @@ impl FormScreen {
+             },
+             FormFieldKind::Choose => {
+                 if field.required && !self.choose_marked(index).iter().any(|m| *m) {
+-                    Some("Choose at least one option".to_owned())
++                    Some(tr("Choose at least one option").to_owned())
+                 } else {
+                     None
+                 }
+diff --git a/default-plugins/prompt/src/main.rs b/default-plugins/prompt/src/main.rs
+index d9c2081..c295cb1 100644
+--- a/default-plugins/prompt/src/main.rs
++++ b/default-plugins/prompt/src/main.rs
+@@ -71,3 +71,4 @@ impl ZellijPlugin for Prompt {
+         self.app.render(rows, cols, Instant::now());
+     }
+ }
++
+diff --git a/default-plugins/prompt/src/outcome.rs b/default-plugins/prompt/src/outcome.rs
+index ffc80ba..fb7b718 100644
+--- a/default-plugins/prompt/src/outcome.rs
++++ b/default-plugins/prompt/src/outcome.rs
+@@ -1,4 +1,5 @@
+ use serde_json::{json, Value};
++use zellij_i18n::trf;
+ use zellij_utils::prompt::{parse_bool, EXIT_ANSWERED, EXIT_CANCELLED, EXIT_ERROR, EXIT_TIMEOUT};
+ 
+ use crate::request::{Request, Spec};
+@@ -88,7 +89,7 @@ pub fn default_answer(request: &Request) -> Result<Option<Answer>, String> {
+             default
+                 .trim()
+                 .parse()
+-                .map_err(|_| format!("'{}' is not a whole number", default))?,
++                .map_err(|_| trf("\'{v}\' is not a whole number", &[("v", default.to_string().as_str())]))?,
+         ),
+         Spec::Toggle { .. } => Answer::Bool(parse_bool(default)?),
+         Spec::Form { default, .. } => {
+diff --git a/default-plugins/prompt/src/ui.rs b/default-plugins/prompt/src/ui.rs
+index 8464228..25cb522 100644
+--- a/default-plugins/prompt/src/ui.rs
++++ b/default-plugins/prompt/src/ui.rs
+@@ -1,4 +1,5 @@
+ use serde_json::Value;
++use zellij_i18n::{tr, trf};
+ use zellij_tile::graphemes;
+ use zellij_tile::prelude::*;
+ use zellij_utils::prompt::{ChoiceItem, MENU_CHOICE_FIELD, MENU_REMEMBER_FIELD};
+@@ -52,13 +53,13 @@ fn is_key(key: &KeyWithModifier, bare_key: BareKey) -> bool {
+ pub fn check_text(text: &str, required: bool, pattern: Option<&Pattern>) -> Result<(), String> {
+     if text.is_empty() {
+         if required {
+-            return Err("This field is required".to_owned());
++            return Err(tr("This field is required").to_owned());
+         }
+         return Ok(());
+     }
+     match pattern {
+         Some(pattern) if !pattern.is_match(text) => {
+-            Err(format!("Must match {}", pattern.0.as_str()))
++            Err(trf("Must match {pattern}", &[("pattern", pattern.0.as_str())]))
+         },
+         _ => Ok(()),
+     }
+@@ -148,7 +149,7 @@ impl Screen {
+                     .common
+                     .title
+                     .clone()
+-                    .unwrap_or_else(|| "Confirm".to_owned()),
++                    .unwrap_or_else(|| tr("Confirm").to_owned()),
+                 message,
+                 yes,
+                 no,
+@@ -500,7 +501,7 @@ impl ChooseScreen {
+             preselected,
+             search: TextInput::empty()
+                 .search_mode()
+-                .placeholder("Type to search")
++                .placeholder(tr("Type to search"))
+                 .focused(),
+             list: MenuList::new(vec![]).focused(),
+             visible: vec![],
+@@ -747,7 +748,7 @@ impl ChooseScreen {
+         self.search.render(x, y, width);
+         if self.items.is_empty() && !self.reading {
+             print_text_with_coordinates(
+-                Text::from("Nothing to choose from").dim_all(),
++                Text::from(tr("Nothing to choose from")).dim_all(),
+                 x + 1,
+                 y + 1,
+                 Some(width.saturating_sub(1)),
+@@ -971,11 +972,11 @@ impl NumberScreen {
+         }
+         let text = self.stepper.edit_text().trim();
+         if text.is_empty() || text == "-" {
+-            return Some("Type a whole number".to_owned());
++            return Some(tr("Type a whole number").to_owned());
+         }
+         match text.parse::<i64>() {
+             Ok(value) => range_error(value, self.min, self.max),
+-            Err(_) => Some("Type a whole number".to_owned()),
++            Err(_) => Some(tr("Type a whole number").to_owned()),
+         }
+     }
+     pub fn handle_key(&mut self, key: &KeyWithModifier) -> Step {
+diff --git a/default-plugins/share/Cargo.toml b/default-plugins/share/Cargo.toml
+index 3a765b4..33d877d 100644
+--- a/default-plugins/share/Cargo.toml
++++ b/default-plugins/share/Cargo.toml
+@@ -6,5 +6,6 @@ edition.workspace = true
+ license.workspace = true
+ 
+ [dependencies]
++zellij-i18n = { workspace = true }
+ zellij-tile = { path = "../../zellij-tile" }
+ url = { workspace = true }
+diff --git a/default-plugins/share/src/main.rs b/default-plugins/share/src/main.rs
+index 09d4c7d..c600f10 100644
+--- a/default-plugins/share/src/main.rs
++++ b/default-plugins/share/src/main.rs
+@@ -4,6 +4,7 @@ mod token_screen;
+ mod ui_components;
+ 
+ use std::net::IpAddr;
++use zellij_i18n::{tr, trf};
+ use zellij_tile::prelude::*;
+ 
+ use std::collections::{BTreeMap, HashMap};
+@@ -86,7 +87,7 @@ impl App {
+ 
+     fn set_plugin_title(&self) {
+         if let Some(plugin_id) = self.state.own_plugin_id {
+-            rename_plugin_pane(plugin_id, "Share Session");
++            rename_plugin_pane(plugin_id, tr("Share Session"));
+         }
+     }
+ 
+@@ -309,7 +310,7 @@ impl App {
+                     if self.tokens.adjust_selection_after_list_change() {
+                         self.change_to_main_screen();
+                     }
+-                    self.state.info = Some("Revoked. Connected clients not affected.".to_owned());
++                    self.state.info = Some(tr("Revoked. Connected clients not affected.").to_owned());
+                 },
+                 Err(e) => self.web_server.error = Some(e),
+             }
+@@ -325,7 +326,7 @@ impl App {
+                 if self.tokens.adjust_selection_after_list_change() {
+                     self.change_to_main_screen();
+                 }
+-                self.state.info = Some("Revoked. Connected clients not affected.".to_owned());
++                self.state.info = Some(tr("Revoked. Connected clients not affected.").to_owned());
+             },
+             Err(e) => self.web_server.error = Some(e),
+         }
+@@ -383,8 +384,8 @@ impl App {
+     }
+ 
+     fn render_no_capability_message(&self, rows: usize, cols: usize) {
+-        let full_text = "This version of Zellij was compiled without web sharing capabilities";
+-        let short_text = "No web server capabilities";
++        let full_text = tr("This version of Zellij was compiled without web sharing capabilities");
++        let short_text = tr("No web server capabilities");
+         let text = if cols >= full_text.chars().count() {
+             full_text
+         } else {
+@@ -529,7 +530,7 @@ impl TokenManager {
+                 self.list = tokens;
+                 Ok(())
+             },
+-            Err(e) => Err(format!("Failed to retrieve login tokens: {}", e)),
++            Err(e) => Err(trf("Failed to retrieve login tokens: {err}", &[("err", e.to_string().as_str())])),
+         }
+     }
+ 
+@@ -682,3 +683,4 @@ impl CoordinatesInLine {
+         x >= self.x && x <= self.x + self.width && self.y == y
+     }
+ }
++
+diff --git a/default-plugins/share/src/main_screen.rs b/default-plugins/share/src/main_screen.rs
+index 9203dfa..f868523 100644
+--- a/default-plugins/share/src/main_screen.rs
++++ b/default-plugins/share/src/main_screen.rs
+@@ -1,4 +1,5 @@
+ use super::CoordinatesInLine;
++use zellij_i18n::tr;
+ use crate::ui_components::{
+     hovering_on_line, render_text_with_underline, CurrentSessionSection, Usage,
+     WebServerStatusSection,
+@@ -30,13 +31,22 @@ pub struct MainScreen<'a> {
+ }
+ 
+ impl<'a> MainScreen<'a> {
+-    const TITLE_TEXT: &'static str = "Share Session Locally in the Browser";
+-    const WARNING_TEXT: &'static str =
+-        "[*] Connection unencrypted. Consider using an SSL certificate.";
+-    const MORE_INFO_TEXT: &'static str = "More info: ";
++    fn title_text() -> &'static str {
++    tr("Share Session Locally in the Browser")
++}
++    fn warning_text() -> &'static str {
++    tr("[*] Connection unencrypted. Consider using an SSL certificate.")
++}
++    fn more_info_text() -> &'static str {
++    tr("More info: ")
++}
+     const SSL_URL: &'static str = "https://zellij.dev/documentation/web-client.html#https";
+-    const HELP_TEXT_WITH_CLICK: &'static str = "Help: Click or Shift-Click to open in browser";
+-    const HELP_TEXT_SHIFT_ONLY: &'static str = "Help: Shift-Click to open in browser";
++    fn help_text_with_click() -> &'static str {
++    tr("Help: Click or Shift-Click to open in browser")
++}
++    fn help_text_shift_only() -> &'static str {
++    tr("Help: Shift-Click to open in browser")
++}
+     pub fn new(
+         token_list_is_empty: bool,
+         web_server_started: bool,
+@@ -98,7 +108,7 @@ impl<'a> MainScreen<'a> {
+             self.connection_is_unencrypted(),
+         );
+ 
+-        let title_width = Self::TITLE_TEXT.chars().count();
++        let title_width = Self::title_text().chars().count();
+ 
+         let (web_server_width, web_server_height) =
+             web_server_status_section.web_server_status_width_and_height();
+@@ -123,7 +133,7 @@ impl<'a> MainScreen<'a> {
+         Layout {
+             base_x: cols.saturating_sub(max_width) / 2,
+             base_y: rows.saturating_sub(total_height) / 2,
+-            title_text: Self::TITLE_TEXT,
++            title_text: Self::title_text(),
+             web_server_height,
+             usage_height,
+             usage_width,
+@@ -244,18 +254,18 @@ impl<'a> MainScreen<'a> {
+     }
+ 
+     fn unencrypted_warning_width(&self) -> usize {
+-        let more_info_line = format!("{}{}", Self::MORE_INFO_TEXT, Self::SSL_URL);
++        let more_info_line = format!("{}{}", Self::more_info_text(), Self::SSL_URL);
+         std::cmp::max(
+-            Self::WARNING_TEXT.chars().count(),
++            Self::warning_text().chars().count(),
+             more_info_line.chars().count(),
+         )
+     }
+ 
+     fn render_unencrypted_warning(&self, x: usize, y: usize, state: &mut MainScreenState) {
+-        let warning_text = Text::from(Self::WARNING_TEXT).color_range(1, ..3);
+-        let more_info_line = Text::from(format!("{}{}", Self::MORE_INFO_TEXT, Self::SSL_URL));
++        let warning_text = Text::from(Self::warning_text()).color_range(1, ..3);
++        let more_info_line = Text::from(format!("{}{}", Self::more_info_text(), Self::SSL_URL));
+ 
+-        let url_x = x + Self::MORE_INFO_TEXT.chars().count();
++        let url_x = x + Self::more_info_text().chars().count();
+         let url_y = y + 1;
+         let url_width = Self::SSL_URL.chars().count();
+ 
+@@ -275,11 +285,11 @@ impl<'a> MainScreen<'a> {
+ 
+     fn render_link_help(&self, x: usize, y: usize) {
+         let help_text = if self.link_executable.is_some() {
+-            Text::from(Self::HELP_TEXT_WITH_CLICK)
++            Text::from(Self::help_text_with_click())
+                 .color_range(3, 6..=10)
+                 .color_range(3, 15..=25)
+         } else {
+-            Text::from(Self::HELP_TEXT_SHIFT_ONLY).color_range(3, 6..=16)
++            Text::from(Self::help_text_shift_only()).color_range(3, 6..=16)
+         };
+         print_text_with_coordinates(help_text, x, y, None, None);
+     }
+@@ -299,3 +309,4 @@ struct Layout<'a> {
+     usage_height: usize,
+     usage_width: usize,
+ }
++
+diff --git a/default-plugins/share/src/token_management_screen.rs b/default-plugins/share/src/token_management_screen.rs
+index 9bb43df..f07bd09 100644
+--- a/default-plugins/share/src/token_management_screen.rs
++++ b/default-plugins/share/src/token_management_screen.rs
+@@ -1,4 +1,5 @@
+ use zellij_tile::prelude::*;
++use zellij_i18n::{tr, trf};
+ 
+ #[derive(Debug)]
+ struct ScreenContent {
+@@ -101,9 +102,9 @@ impl<'a> TokenManagementScreen<'a> {
+             };
+         }
+ 
+-        const PREFERRED_DATE_WIDTH: usize = 29; // "issued on YYYY-MM-DD HH:MM:SS"
+-        const PREFERRED_READ_ONLY_WIDTH: usize = 10; // "read-write"
+-        const PREFERRED_CONTROLS_WIDTH: usize = 24; // "(<x> revoke, <r> rename)"
++        const PREFERRED_DATE_WIDTH: usize = 29; // tr("issued on YYYY-MM-DD HH:MM:SS")
++        const PREFERRED_READ_ONLY_WIDTH: usize = 10; // tr("read-write")
++        const PREFERRED_CONTROLS_WIDTH: usize = 24; // tr("(<x> revoke, <r> rename)")
+ 
+         let available_width = max_table_width.saturating_sub(COLUMN_SPACING);
+         let preferred_fixed_width =
+@@ -157,7 +158,7 @@ impl<'a> TokenManagementScreen<'a> {
+         include_issued_prefix: bool,
+     ) -> String {
+         let full_text = if include_issued_prefix {
+-            format!("issued on {}", created_at)
++            trf("issued on {date}", &[("date", created_at)])
+         } else {
+             created_at.to_string()
+         };
+@@ -166,7 +167,7 @@ impl<'a> TokenManagementScreen<'a> {
+             return full_text;
+         }
+ 
+-        // If we can't fit "issued on", use the date
++        // If we can't fit tr("issued on"), use the date
+         if !include_issued_prefix || created_at.chars().count() <= max_width {
+             if created_at.chars().count() <= max_width {
+                 return created_at.to_string();
+@@ -180,16 +181,16 @@ impl<'a> TokenManagementScreen<'a> {
+             let truncated: String = chars.iter().take(max_width - 3).collect();
+             format!("{}...", truncated)
+         } else {
+-            // Try without "issued on" prefix
++            // Try without tr("issued on") prefix
+             self.format_date(created_at, max_width, false)
+         }
+     }
+ 
+     fn format_read_only(&self, is_read_only: bool, max_width: usize) -> String {
+         let full_text = if is_read_only {
+-            "read-only"
++            tr("read-only")
+         } else {
+-            "read-write"
++            tr("read-write")
+         };
+         let short_text = if is_read_only { "RO" } else { "RW" };
+ 
+@@ -222,7 +223,7 @@ impl<'a> TokenManagementScreen<'a> {
+             return " ".repeat(max_width);
+         }
+ 
+-        let full_controls = "(<x> revoke, <r> rename)";
++        let full_controls = tr("(<x> revoke, <r> rename)");
+         let short_controls = "(<x>, <r>)";
+ 
+         if full_controls.chars().count() <= max_width {
+@@ -262,7 +263,7 @@ impl<'a> TokenManagementScreen<'a> {
+         let max_table_width = self.cols;
+         let column_widths = self.calculate_column_widths();
+ 
+-        let title_text = "List of Login Tokens";
++        let title_text = tr("List of Login Tokens");
+         let title = Text::from(title_text).color_range(2, ..);
+         max_width = std::cmp::max(max_width, title_text.len());
+ 
+@@ -448,8 +449,8 @@ impl<'a> TokenManagementScreen<'a> {
+         let controls_text = self.format_controls(column_widths.controls, true);
+ 
+         // Determine highlight ranges for controls based on the actual content
+-        let (x_range, r_range) = if controls_text.contains("revoke") {
+-            // Full controls: "(<x> revoke, <r> rename)"
++        let (x_range, r_range) = if controls_text.contains(tr("revoke")) {
++            // Full controls: tr("(<x> revoke, <r> rename)")
+             (1..=3, 13..=15)
+         } else {
+             // Short controls: "(<x>, <r>)"
+@@ -501,9 +502,9 @@ impl<'a> TokenManagementScreen<'a> {
+     }
+ 
+     fn create_new_token_line(&self) -> Text {
+-        let full_create_text = "<n> - create new token, <o> - create read-only token".to_string();
+-        let medium_create_text = "<n> - new token, <o> - read-only".to_string();
+-        let short_create_text = "<n> - new, <o> - RO".to_string();
++        let full_create_text = tr("<n> - create new token, <o> - create read-only token").to_string();
++        let medium_create_text = tr("<n> - new token, <o> - read-only").to_string();
++        let short_create_text = tr("<n> - new, <o> - RO").to_string();
+ 
+         if let Some(name) = &self.entering_new_token_name {
+             let max_width = self.cols.saturating_sub(1); // Leave room for cursor
+@@ -533,17 +534,17 @@ impl<'a> TokenManagementScreen<'a> {
+     fn create_help_line(&self) -> (String, Text) {
+         let (text, highlight_range) = if self.entering_new_token_name.is_some() {
+             (
+-                "Help: Enter optional name for new token, <Enter> to submit",
++                tr("Help: Enter optional name for new token, <Enter> to submit"),
+                 41..=47,
+             )
+         } else if self.renaming_token.is_some() {
+             (
+-                "Help: Enter new name for this token, <Enter> to submit",
++                tr("Help: Enter new name for this token, <Enter> to submit"),
+                 39..=45,
+             )
+         } else {
+             (
+-                "Help: <Ctrl x> - revoke all tokens, <Esc> - go back",
++                tr("Help: <Ctrl x> - revoke all tokens, <Esc> - go back"),
+                 6..=13,
+             )
+         };
+@@ -634,3 +635,4 @@ impl<'a> TokenManagementScreen<'a> {
+         }
+     }
+ }
++
+diff --git a/default-plugins/share/src/token_screen.rs b/default-plugins/share/src/token_screen.rs
+index f8a9ef3..d29e7b4 100644
+--- a/default-plugins/share/src/token_screen.rs
++++ b/default-plugins/share/src/token_screen.rs
+@@ -1,16 +1,34 @@
+ use zellij_tile::prelude::*;
++use zellij_i18n::tr;
+ 
+ // Constants for text content
+-const TOKEN_LABEL_LONG: &str = "New log-in token: ";
+-const TOKEN_LABEL_SHORT: &str = "Token: ";
+-const EXPLANATION_1_LONG: &str = "Use this token to log-in from the browser.";
+-const EXPLANATION_1_SHORT: &str = "Use to log-in from the browser.";
+-const EXPLANATION_2_LONG: &str =
+-    "Copy this token, because it will not be saved and can't be retrieved.";
+-const EXPLANATION_2_SHORT: &str = "It will not be saved and can't be retrieved.";
+-const EXPLANATION_3_LONG: &str = "If lost, it can always be revoked and a new one generated.";
+-const EXPLANATION_3_SHORT: &str = "It can always be revoked and a regenerated.";
+-const ESC_INSTRUCTION: &str = "<Esc> - go back";
++fn token_label_long() -> &'static str {
++    tr("New log-in token: ")
++}
++fn token_label_short() -> &'static str {
++    tr("Token: ")
++}
++fn explanation_1_long() -> &'static str {
++    tr("Use this token to log-in from the browser.")
++}
++fn explanation_1_short() -> &'static str {
++    tr("Use to log-in from the browser.")
++}
++fn explanation_2_long() -> &'static str {
++    tr("Copy this token, because it will not be saved and can't be retrieved.")
++}
++fn explanation_2_short() -> &'static str {
++    tr("It will not be saved and can't be retrieved.")
++}
++fn explanation_3_long() -> &'static str {
++    tr("If lost, it can always be revoked and a new one generated.")
++}
++fn explanation_3_short() -> &'static str {
++    tr("It can always be revoked and a regenerated.")
++}
++fn esc_instruction() -> &'static str {
++    tr("<Esc> - go back")
++}
+ 
+ // Screen layout constants
+ const SCREEN_HEIGHT: usize = 7;
+@@ -64,22 +82,22 @@ impl TokenScreen {
+ 
+     fn prepare_screen_elements(&self) -> ScreenElements {
+         let token_variant = TextVariant {
+-            long: TOKEN_LABEL_LONG,
+-            short: TOKEN_LABEL_SHORT,
++            long: token_label_long(),
++            short: token_label_short(),
+         };
+ 
+         let explanation_variants = [
+             TextVariant {
+-                long: EXPLANATION_1_LONG,
+-                short: EXPLANATION_1_SHORT,
++                long: explanation_1_long(),
++                short: explanation_1_short(),
+             },
+             TextVariant {
+-                long: EXPLANATION_2_LONG,
+-                short: EXPLANATION_2_SHORT,
++                long: explanation_2_long(),
++                short: explanation_2_short(),
+             },
+             TextVariant {
+-                long: EXPLANATION_3_LONG,
+-                short: EXPLANATION_3_SHORT,
++                long: explanation_3_long(),
++                short: explanation_3_short(),
+             },
+         ];
+ 
+@@ -107,7 +125,7 @@ impl TokenScreen {
+             })
+             .collect();
+ 
+-        let esc_element = Text::from(ESC_INSTRUCTION).color_range(3, ..=4);
++        let esc_element = Text::from(esc_instruction()).color_range(3, ..=4);
+ 
+         ScreenElements {
+             token: token_element,
+@@ -128,7 +146,7 @@ impl TokenScreen {
+             .explanation_texts
+             .iter()
+             .map(|text| text.chars().count());
+-        let esc_width = ESC_INSTRUCTION.chars().count();
++        let esc_width = esc_instruction().chars().count();
+ 
+         [token_width, esc_width]
+             .into_iter()
+@@ -190,3 +208,4 @@ struct ScreenElements {
+     explanations: Vec<Text>,
+     esc: Text,
+ }
++
+diff --git a/default-plugins/share/src/ui_components.rs b/default-plugins/share/src/ui_components.rs
+index eddd00a..b799b65 100644
+--- a/default-plugins/share/src/ui_components.rs
++++ b/default-plugins/share/src/ui_components.rs
+@@ -3,37 +3,91 @@ use zellij_tile::prelude::*;
+ 
+ use crate::CoordinatesInLine;
+ use std::collections::HashMap;
++use zellij_i18n::tr;
+ 
+-pub const USAGE_TITLE: &str = "How it works:";
+-pub const FIRST_TIME_USAGE_TITLE: &str = "Before logging in for the first time:";
+-pub const FIRST_TIME_BULLETIN_1: &str = "- Press <t> to generate a login token";
+-pub const BULLETIN_1_FULL: &str = "- Visit base URL to start a new session";
+-pub const BULLETIN_1_SHORT: &str = "- Base URL: new session";
+-pub const BULLETIN_2_FULL: &str = "- Follow base URL with a session name to attach to or create it";
+-pub const BULLETIN_2_SHORT: &str = "- Base URL + session name: attach or create";
+-pub const BULLETIN_3_FULL: &str =
+-    "- By default sessions not started from the web must be explicitly shared";
+-pub const BULLETIN_3_SHORT: &str = "- Sessions not started from the web must be explicitly shared";
+-pub const BULLETIN_4: &str = "- <t> manage login tokens";
+-
+-pub const WEB_SERVER_TITLE: &str = "Web server: ";
+-pub const WEB_SERVER_RUNNING: &str = "RUNNING ";
+-pub const WEB_SERVER_NOT_RUNNING: &str = "NOT RUNNING";
+-pub const WEB_SERVER_INCOMPATIBLE_PREFIX: &str = "RUNNING INCOMPATIBLE VERSION ";
+-pub const CTRL_C_STOP: &str = "(<Ctrl c> - Stop)";
+-pub const CTRL_C_STOP_OTHER: &str = "<Ctrl c> - Stop other server";
+-pub const PRESS_ENTER_START: &str = "Press <ENTER> to start";
+-pub const ERROR_PREFIX: &str = "ERROR: ";
+-pub const URL_TITLE: &str = "URL: ";
+-pub const UNENCRYPTED_MARKER: &str = " [*]";
+-
+-pub const CURRENT_SESSION_TITLE: &str = "Current session: ";
+-pub const SESSION_URL_TITLE: &str = "Session URL: ";
+-pub const SHARING_STATUS: &str = "SHARING (<SPACE> - Stop Sharing)";
+-pub const SHARING_DISABLED: &str = "SHARING IS DISABLED";
+-pub const NOT_SHARING: &str = "NOT SHARING";
+-pub const PRESS_SPACE_SHARE: &str = "Press <SPACE> to share";
+-pub const WEB_SERVER_OFFLINE: &str = "...but web server is offline";
++pub fn usage_title() -> &'static str {
++    tr("How it works:")
++}
++pub fn first_time_usage_title() -> &'static str {
++    tr("Before logging in for the first time:")
++}
++pub fn first_time_bulletin_1() -> &'static str {
++    tr("- Press <t> to generate a login token")
++}
++pub fn bulletin_1_full() -> &'static str {
++    tr("- Visit base URL to start a new session")
++}
++pub fn bulletin_1_short() -> &'static str {
++    tr("- Base URL: new session")
++}
++pub fn bulletin_2_full() -> &'static str {
++    tr("- Follow base URL with a session name to attach to or create it")
++}
++pub fn bulletin_2_short() -> &'static str {
++    tr("- Base URL + session name: attach or create")
++}
++pub fn bulletin_3_full() -> &'static str {
++    tr("- By default sessions not started from the web must be explicitly shared")
++}
++pub fn bulletin_3_short() -> &'static str {
++    tr("- Sessions not started from the web must be explicitly shared")
++}
++pub fn bulletin_4() -> &'static str {
++    tr("- <t> manage login tokens")
++}
++
++pub fn web_server_title() -> &'static str {
++    tr("Web server: ")
++}
++pub fn web_server_running() -> &'static str {
++    tr("RUNNING ")
++}
++pub fn web_server_not_running() -> &'static str {
++    tr("NOT RUNNING")
++}
++pub fn web_server_incompatible_prefix() -> &'static str {
++    tr("RUNNING INCOMPATIBLE VERSION ")
++}
++pub fn ctrl_c_stop() -> &'static str {
++    tr("(<Ctrl c> - Stop)")
++}
++pub fn ctrl_c_stop_other() -> &'static str {
++    tr("<Ctrl c> - Stop other server")
++}
++pub fn press_enter_start() -> &'static str {
++    tr("Press <ENTER> to start")
++}
++pub fn error_prefix() -> &'static str {
++    tr("ERROR: ")
++}
++pub fn url_title() -> &'static str {
++    tr("URL: ")
++}
++pub fn unencrypted_marker() -> &'static str {
++    tr(" [*]")
++}
++
++pub fn current_session_title() -> &'static str {
++    tr("Current session: ")
++}
++pub fn session_url_title() -> &'static str {
++    tr("Session URL: ")
++}
++pub fn sharing_status() -> &'static str {
++    tr("SHARING (<SPACE> - Stop Sharing)")
++}
++pub fn sharing_disabled() -> &'static str {
++    tr("SHARING IS DISABLED")
++}
++pub fn not_sharing() -> &'static str {
++    tr("NOT SHARING")
++}
++pub fn press_space_share() -> &'static str {
++    tr("Press <SPACE> to share")
++}
++pub fn web_server_offline() -> &'static str {
++    tr("...but web server is offline")
++}
+ 
+ pub const COLOR_INDEX_0: usize = 0;
+ pub const COLOR_INDEX_1: usize = 1;
+@@ -146,7 +200,7 @@ fn calculate_max_length(texts: &[&str]) -> usize {
+ 
+ fn format_url_with_encryption_marker(base_url: &str, is_unencrypted: bool) -> String {
+     if is_unencrypted {
+-        format!("{}{}", base_url, UNENCRYPTED_MARKER)
++        format!("{}{}", base_url, unencrypted_marker())
+     } else {
+         base_url.to_string()
+     }
+@@ -171,16 +225,16 @@ impl Usage {
+     pub fn new(has_login_tokens: bool) -> Self {
+         Usage {
+             has_login_tokens,
+-            usage_title: USAGE_TITLE,
+-            bulletin_1_full: BULLETIN_1_FULL,
+-            bulletin_1_short: BULLETIN_1_SHORT,
+-            bulletin_2_full: BULLETIN_2_FULL,
+-            bulletin_2_short: BULLETIN_2_SHORT,
+-            bulletin_3_full: BULLETIN_3_FULL,
+-            bulletin_3_short: BULLETIN_3_SHORT,
+-            bulletin_4: BULLETIN_4,
+-            first_time_usage_title: FIRST_TIME_USAGE_TITLE,
+-            first_time_bulletin_1: FIRST_TIME_BULLETIN_1,
++            usage_title: usage_title(),
++            bulletin_1_full: bulletin_1_full(),
++            bulletin_1_short: bulletin_1_short(),
++            bulletin_2_full: bulletin_2_full(),
++            bulletin_2_short: bulletin_2_short(),
++            bulletin_3_full: bulletin_3_full(),
++            bulletin_3_short: bulletin_3_short(),
++            bulletin_4: bulletin_4(),
++            first_time_usage_title: first_time_usage_title(),
++            first_time_bulletin_1: first_time_bulletin_1(),
+         }
+     }
+ 
+@@ -324,7 +378,7 @@ impl WebServerStatusSection {
+             );
+             max_len = std::cmp::max(
+                 max_len,
+-                URL_TITLE.chars().count() + url_display.chars().count(),
++                url_title().chars().count() + url_display.chars().count(),
+             );
+         } else {
+             max_len = std::cmp::max(max_len, self.start_server_line().1);
+@@ -360,7 +414,7 @@ impl WebServerStatusSection {
+ 
+     fn render_server_url(&mut self, x: usize, y: usize, hover_coordinates: Option<(usize, usize)>) {
+         let server_url = &self.web_server_base_url;
+-        let url_x = x + URL_TITLE.chars().count();
++        let url_x = x + url_title().chars().count();
+         let url_width = server_url.chars().count();
+         let url_y = y + 1;
+ 
+@@ -370,14 +424,14 @@ impl WebServerStatusSection {
+         );
+ 
+         let info_line = if self.connection_is_unencrypted {
+-            let full_text = format!("{}{}{}", URL_TITLE, server_url, UNENCRYPTED_MARKER);
++            let full_text = format!("{}{}{}", url_title(), server_url, unencrypted_marker());
+             ColoredTextBuilder::new(full_text)
+-                .highlight_range(0, URL_TITLE.chars().count(), COLOR_INDEX_0)
+-                .highlight_substring(UNENCRYPTED_MARKER, COLOR_INDEX_1)
++                .highlight_range(0, url_title().chars().count(), COLOR_INDEX_0)
++                .highlight_substring(unencrypted_marker(), COLOR_INDEX_1)
+                 .build()
+                 .0
+         } else {
+-            create_titled_text(URL_TITLE, server_url, COLOR_INDEX_0, COLOR_INDEX_1).0
++            create_titled_text(url_title(), server_url, COLOR_INDEX_0, COLOR_INDEX_1).0
+         };
+ 
+         print_text_with_coordinates(info_line, x, y + 1, None, None);
+@@ -395,8 +449,8 @@ impl WebServerStatusSection {
+             self.create_incompatible_version_line(different_version)
+         } else {
+             create_titled_text(
+-                WEB_SERVER_TITLE,
+-                WEB_SERVER_NOT_RUNNING,
++                web_server_title(),
++                web_server_not_running(),
+                 COLOR_INDEX_0,
+                 COLOR_HIGHLIGHT,
+             )
+@@ -404,32 +458,32 @@ impl WebServerStatusSection {
+     }
+ 
+     fn create_running_status_line(&self) -> (Text, usize) {
+-        let full_text = format!("{}{}{}", WEB_SERVER_TITLE, WEB_SERVER_RUNNING, CTRL_C_STOP);
++        let full_text = format!("{}{}{}", web_server_title(), web_server_running(), ctrl_c_stop());
+         ColoredTextBuilder::new(full_text)
+-            .highlight_range(0, WEB_SERVER_TITLE.chars().count(), COLOR_INDEX_0)
+-            .highlight_substring(WEB_SERVER_RUNNING.trim(), COLOR_HIGHLIGHT)
++            .highlight_range(0, web_server_title().chars().count(), COLOR_INDEX_0)
++            .highlight_substring(web_server_running().trim(), COLOR_HIGHLIGHT)
+             .highlight_substring("<Ctrl c>", COLOR_HIGHLIGHT)
+             .build()
+     }
+ 
+     fn create_incompatible_version_line(&self, different_version: &str) -> (Text, usize) {
+-        let value = format!("{}{}", WEB_SERVER_INCOMPATIBLE_PREFIX, different_version);
+-        create_titled_text(WEB_SERVER_TITLE, &value, COLOR_INDEX_0, COLOR_HIGHLIGHT)
++        let value = format!("{}{}", web_server_incompatible_prefix(), different_version);
++        create_titled_text(web_server_title(), &value, COLOR_INDEX_0, COLOR_HIGHLIGHT)
+     }
+ 
+     fn start_server_line(&self) -> (Text, usize) {
+-        create_highlighted_shortcut(PRESS_ENTER_START, "<ENTER>", COLOR_HIGHLIGHT)
++        create_highlighted_shortcut(press_enter_start(), "<ENTER>", COLOR_HIGHLIGHT)
+     }
+ 
+     fn web_server_error_component(&self, error: &str) -> (Text, usize) {
+-        let text = format!("{}{}", ERROR_PREFIX, error);
++        let text = format!("{}{}", error_prefix(), error);
+         ColoredTextBuilder::new(text)
+             .highlight_all(COLOR_HIGHLIGHT)
+             .build()
+     }
+ 
+     fn web_server_different_version_error_component(&self, _version: &str) -> (Text, usize) {
+-        create_highlighted_shortcut(CTRL_C_STOP_OTHER, "<Ctrl c>", COLOR_HIGHLIGHT)
++        create_highlighted_shortcut(ctrl_c_stop_other(), "<Ctrl c>", COLOR_HIGHLIGHT)
+     }
+ }
+ 
+@@ -476,10 +530,10 @@ impl CurrentSessionSection {
+             );
+             max_len = std::cmp::max(
+                 max_len,
+-                SESSION_URL_TITLE.chars().count() + url_display.chars().count(),
++                session_url_title().chars().count() + url_display.chars().count(),
+             );
+         } else if self.web_sharing.web_clients_allowed() {
+-            max_len = std::cmp::max(max_len, WEB_SERVER_OFFLINE.chars().count());
++            max_len = std::cmp::max(max_len, web_server_offline().chars().count());
+         } else {
+             max_len = std::cmp::max(max_len, self.press_space_to_share().1);
+         }
+@@ -512,7 +566,7 @@ impl CurrentSessionSection {
+         if self.web_sharing.web_clients_allowed() && self.web_server_started {
+             self.render_session_url(x, y, hover_coordinates);
+         } else if self.web_sharing.web_clients_allowed() {
+-            let info_line = Text::from(WEB_SERVER_OFFLINE);
++            let info_line = Text::from(web_server_offline());
+             print_text_with_coordinates(info_line, x, y + 1, None, None);
+         } else if !self.web_sharing.sharing_is_disabled() {
+             let info_line = self.press_space_to_share().0;
+@@ -527,7 +581,7 @@ impl CurrentSessionSection {
+         hover_coordinates: Option<(usize, usize)>,
+     ) {
+         let session_url = self.session_url();
+-        let url_x = x + SESSION_URL_TITLE.chars().count();
++        let url_x = x + session_url_title().chars().count();
+         let url_width = session_url.chars().count();
+         let url_y = y + 1;
+ 
+@@ -537,15 +591,15 @@ impl CurrentSessionSection {
+         );
+ 
+         let info_line = if self.connection_is_unencrypted {
+-            let full_text = format!("{}{}{}", SESSION_URL_TITLE, session_url, UNENCRYPTED_MARKER);
++            let full_text = format!("{}{}{}", session_url_title(), session_url, unencrypted_marker());
+             ColoredTextBuilder::new(full_text)
+-                .highlight_range(0, SESSION_URL_TITLE.chars().count(), COLOR_INDEX_0)
+-                .highlight_substring(UNENCRYPTED_MARKER, COLOR_INDEX_1)
++                .highlight_range(0, session_url_title().chars().count(), COLOR_INDEX_0)
++                .highlight_substring(unencrypted_marker(), COLOR_INDEX_1)
+                 .build()
+                 .0
+         } else {
+             create_titled_text(
+-                SESSION_URL_TITLE,
++                session_url_title(),
+                 &session_url,
+                 COLOR_INDEX_0,
+                 COLOR_INDEX_1,
+@@ -562,18 +616,18 @@ impl CurrentSessionSection {
+     }
+ 
+     fn render_current_session_sharing(&self) -> (Text, usize) {
+-        let full_text = format!("{}{}", CURRENT_SESSION_TITLE, SHARING_STATUS);
++        let full_text = format!("{}{}", current_session_title(), sharing_status());
+         ColoredTextBuilder::new(full_text)
+-            .highlight_range(0, CURRENT_SESSION_TITLE.chars().count(), COLOR_INDEX_0)
+-            .highlight_substring("SHARING", COLOR_HIGHLIGHT)
++            .highlight_range(0, current_session_title().chars().count(), COLOR_INDEX_0)
++            .highlight_substring(tr("SHARING"), COLOR_HIGHLIGHT)
+             .highlight_substring("<SPACE>", COLOR_HIGHLIGHT)
+             .build()
+     }
+ 
+     fn render_sharing_is_disabled(&self) -> (Text, usize) {
+         create_titled_text(
+-            CURRENT_SESSION_TITLE,
+-            SHARING_DISABLED,
++            current_session_title(),
++            sharing_disabled(),
+             COLOR_INDEX_0,
+             COLOR_HIGHLIGHT,
+         )
+@@ -581,8 +635,8 @@ impl CurrentSessionSection {
+ 
+     fn render_not_sharing(&self) -> (Text, usize) {
+         create_titled_text(
+-            CURRENT_SESSION_TITLE,
+-            NOT_SHARING,
++            current_session_title(),
++            not_sharing(),
+             COLOR_INDEX_0,
+             COLOR_HIGHLIGHT,
+         )
+@@ -592,11 +646,11 @@ impl CurrentSessionSection {
+         let web_server_ip = self
+             .web_server_ip
+             .map(|i| i.to_string())
+-            .unwrap_or_else(|| "UNDEFINED".to_owned());
++            .unwrap_or_else(|| tr("UNDEFINED").to_owned());
+         let web_server_port = self
+             .web_server_port
+             .map(|p| p.to_string())
+-            .unwrap_or_else(|| "UNDEFINED".to_owned());
++            .unwrap_or_else(|| tr("UNDEFINED").to_owned());
+         let prefix = if self.connection_is_unencrypted {
+             "http"
+         } else {
+@@ -611,7 +665,7 @@ impl CurrentSessionSection {
+     }
+ 
+     fn press_space_to_share(&self) -> (Text, usize) {
+-        create_highlighted_shortcut(PRESS_SPACE_SHARE, "<SPACE>", COLOR_HIGHLIGHT)
++        create_highlighted_shortcut(press_space_share(), "<SPACE>", COLOR_HIGHLIGHT)
+     }
+ }
+ 
+@@ -635,3 +689,4 @@ pub fn render_text_with_underline(url_x: usize, url_y: usize, url_text: &str) {
+         url_text,
+     );
+ }
++
+diff --git a/default-plugins/strider/Cargo.toml b/default-plugins/strider/Cargo.toml
+index 1f5c9af..5d07e04 100644
+--- a/default-plugins/strider/Cargo.toml
++++ b/default-plugins/strider/Cargo.toml
+@@ -7,6 +7,7 @@ description = "A simplified ranger clone written as a Zellij plugin"
+ license.workspace = true
+ 
+ [dependencies]
++zellij-i18n = { workspace = true }
+ zellij-tile = { path = "../../zellij-tile" }
+ pretty-bytes = { workspace = true }
+ fuzzy-matcher = { workspace = true }
+diff --git a/default-plugins/strider/src/file_list_view.rs b/default-plugins/strider/src/file_list_view.rs
+index cc2a625..579dada 100644
+--- a/default-plugins/strider/src/file_list_view.rs
++++ b/default-plugins/strider/src/file_list_view.rs
+@@ -204,3 +204,4 @@ impl FsEntry {
+         matches!(self, FsEntry::Dir(_))
+     }
+ }
++
+diff --git a/default-plugins/strider/src/main.rs b/default-plugins/strider/src/main.rs
+index 02ae6a9..f8a4cf1 100644
+--- a/default-plugins/strider/src/main.rs
++++ b/default-plugins/strider/src/main.rs
+@@ -205,3 +205,4 @@ impl ZellijPlugin for State {
+         render_instruction_line(rows, cols);
+     }
+ }
++
+diff --git a/default-plugins/strider/src/platform.rs b/default-plugins/strider/src/platform.rs
+index f9eeccc..6353a00 100644
+--- a/default-plugins/strider/src/platform.rs
++++ b/default-plugins/strider/src/platform.rs
+@@ -1,4 +1,5 @@
+ use std::path::{Path, PathBuf};
++use zellij_i18n::trf;
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum Platform {
+@@ -88,7 +89,7 @@ impl Platform {
+                 if s.starts_with("//wsl.localhost/") {
+                     let rest = &s["//wsl.localhost/".len()..];
+                     let distro = rest.trim_end_matches('/');
+-                    return format!("{} (WSL)", distro);
++                    return trf("{name} (WSL)", &[("name", distro)]);
+                 }
+                 Platform::to_host_display(path, platform)
+             },
+@@ -105,7 +106,7 @@ impl Platform {
+             Platform::Unix => s == "/" || s.is_empty(),
+             Platform::Windows => {
+                 let bytes = s.as_bytes();
+-                // Drive root: "C:/" or "C:"
++                // Drive root: "C:/tr(" or ")C:"
+                 let is_drive_root_slash = s.len() == 3
+                     && matches!(bytes.get(0), Some(c) if c.is_ascii_alphabetic())
+                     && matches!(bytes.get(1), Some(b':'))
+diff --git a/default-plugins/strider/src/search_view.rs b/default-plugins/strider/src/search_view.rs
+index f109b60..9d79ee9 100644
+--- a/default-plugins/strider/src/search_view.rs
++++ b/default-plugins/strider/src/search_view.rs
+@@ -133,3 +133,4 @@ impl SearchResult {
+         self.entry.is_folder()
+     }
+ }
++
+diff --git a/default-plugins/strider/src/shared.rs b/default-plugins/strider/src/shared.rs
+index 76a9f2f..293b790 100644
+--- a/default-plugins/strider/src/shared.rs
++++ b/default-plugins/strider/src/shared.rs
+@@ -1,34 +1,41 @@
+ use crate::platform::Platform;
++use zellij_i18n::tr;
+ use std::path::PathBuf;
+ use zellij_tile::graphemes;
+ use zellij_tile::prelude::*;
+ 
+ pub fn render_instruction_line(y: usize, max_cols: usize) {
+     if max_cols > 78 {
+-        let text = "Help: go back with <Ctrl c>, go to root with /, <Ctrl e> - toggle hidden files";
++        let text = tr("Help: go back with <Ctrl c>, go to root with /, <Ctrl e> - toggle hidden files");
+         let text = Text::from(text)
+             .color_range(3, 19..27)
+             .color_range(3, 45..46)
+             .color_range(3, 48..56);
+         print_text_with_coordinates(text, 0, y, Some(max_cols), None);
+     } else if max_cols > 56 {
+-        let text = "Help: <Ctrl c> - back, / - root, <Ctrl e> - hidden files";
++        let text = tr("Help: <Ctrl c> - back, / - root, <Ctrl e> - hidden files");
+         let text = Text::from(text)
+             .color_range(3, 6..14)
+             .color_range(3, 23..24)
+             .color_range(3, 33..41);
+         print_text_with_coordinates(text, 0, y, Some(max_cols), None);
+     } else if max_cols > 25 {
+-        let text = "<Ctrl c> - back, / - root";
++        let text = tr("<Ctrl c> - back, / - root");
+         let text = Text::from(text).color_range(3, ..8).color_range(3, 17..18);
+         print_text_with_coordinates(text, 0, y, Some(max_cols), None);
+     }
+ }
+ 
+ pub fn render_list_tip(y: usize, max_cols: usize) {
+-    let tip = Text::from(format!("(<↓↑> - Navigate, <TAB> - Select)"))
+-        .color_range(3, 1..5)
+-        .color_range(3, 18..23);
++    let tip_text = tr("(<↓↑> - Navigate, <TAB> - Select)");
++    let key_at = |needle: &str| tip_text.find(needle).map(|s| s..s + needle.chars().count());
++    let mut tip = Text::from(tip_text);
++    if let Some(range) = key_at("<↓↑>") {
++        tip = tip.color_range(3, range);
++    }
++    if let Some(range) = key_at("<TAB>") {
++        tip = tip.color_range(3, range);
++    }
+     print_text_with_coordinates(tip, 0, y, Some(max_cols), None);
+ }
+ 
+@@ -71,7 +78,7 @@ pub fn calculate_list_bounds(
+ }
+ 
+ pub fn render_search_term(search_term: &str) {
+-    let prompt = "FIND: ";
++    let prompt = tr("FIND: ");
+     let text = Text::from(format!("{}{}_", prompt, search_term))
+         .color_range(2, 0..prompt.len())
+         .color_range(3, prompt.len()..);
+@@ -80,8 +87,8 @@ pub fn render_search_term(search_term: &str) {
+ }
+ 
+ pub fn render_virtual_root_header(_cols: usize) {
+-    let prompt = "PATH: ";
+-    let title = "Computer";
++    let prompt = tr("PATH: ");
++    let title = tr("Computer");
+     let prompt_len = prompt.chars().count();
+     let path_end = prompt_len + title.chars().count();
+     let text = Text::from(format!("{}{}", prompt, title))
+@@ -99,18 +106,18 @@ pub fn render_current_path(
+     max_cols: usize,
+     platform: Platform,
+ ) {
+-    let prompt = "PATH: ";
++    let prompt = tr("PATH: ");
+     let current_path = Platform::to_host_display(full_path, platform);
+     let prompt_len = graphemes::display_width(prompt);
+     let prompt_chars = prompt.chars().count();
+     let current_path_len = graphemes::display_width(&current_path);
+ 
+     let enter_tip = if handling_filepick {
+-        "Select"
++        tr("Select")
+     } else if path_is_dir {
+-        "Open terminal here"
++        tr("Open terminal here")
+     } else {
+-        "Open in editor"
++        tr("Open in editor")
+     };
+     if max_cols > prompt_len + current_path_len + graphemes::display_width(enter_tip) + 13 {
+         let path_end = prompt_chars + current_path.chars().count();
+@@ -173,3 +180,4 @@ fn truncate_path(path: PathBuf, mut columns_to_remove: usize, platform: Platform
+     }
+     truncated
+ }
++
+diff --git a/default-plugins/strider/src/state.rs b/default-plugins/strider/src/state.rs
+index fb685aa..e3c07f4 100644
+--- a/default-plugins/strider/src/state.rs
++++ b/default-plugins/strider/src/state.rs
+@@ -377,3 +377,4 @@ impl State {
+ pub(crate) fn refresh_directory(full_path: &Path) {
+     change_host_folder(PathBuf::from(full_path));
+ }
++

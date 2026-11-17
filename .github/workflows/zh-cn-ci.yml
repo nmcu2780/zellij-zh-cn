@@ -1,0 +1,105 @@
+name: zellij-zh-cn CI
+
+# 只检查、构建和报告：不发布、不部署、不自动适配新版本。
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1" # 每周一
+  workflow_dispatch:
+
+env:
+  PYTHON: python3
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: fetch upstream baseline
+        run: $PYTHON tools/zhcn.py fetch
+      - name: check (baseline + patches + catalog)
+        run: $PYTHON tools/zhcn.py check
+      - name: report (key/catalog parity)
+        run: $PYTHON tools/zhcn.py report
+      - name: zellij-i18n unit tests
+        run: cargo test --manifest-path crates/zellij-i18n/Cargo.toml
+
+  build:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: "1.95.0"
+          target: wasm32-wasip1
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: fetch upstream baseline
+        run: $PYTHON tools/zhcn.py fetch
+      - name: build localized binary
+        run: $PYTHON tools/zhcn.py build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zellij-zh-bin
+          path: |
+            .work/zellij/target/release/zellij
+            .work/zellij/target/release/zellij.zh-buildinfo.json
+          retention-days: 14
+
+  upstream-watch:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: list upstream tags
+        run: $PYTHON tools/zhcn.py upstream-status
+      - name: probe newest unadapted tag
+        id: probe
+        run: |
+          set -o pipefail
+          $PYTHON tools/zhcn.py upstream-status --json > tags.json
+          cat tags.json
+          newest=$(python3 - <<'EOF'
+          import json
+          rows = json.load(open('tags.json'))
+          unadapted = [r['tag'] for r in rows if r['status'] == '未适配']
+          print(unadapted[-1] if unadapted else '')
+          EOF
+          )
+          echo "newest=$newest" >> "$GITHUB_OUTPUT"
+          if [ -n "$newest" ]; then
+            $PYTHON tools/zhcn.py fetch   # 基线仓库（probe 需要）
+            $PYTHON tools/zhcn.py probe --tag "$newest" --json > probe.json || true
+            cat probe.json
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upstream-probe
+          path: |
+            tags.json
+            probe.json
+          retention-days: 30
+      - name: report unadapted tags
+        run: |
+          if [ -s probe.json ]; then
+            echo '发现未适配的上游版本，请人工评审 probe.json 后再决定是否适配。'
+            exit 1
+          fi
+          echo '无未适配标签。'

@@ -1,0 +1,503 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: zhcn <zhcn@local>
+Date: Mon, 16 Nov 2026 15:29:58 +0800
+Subject: [PATCH 05/19] i18n: translate bars status-bar hints and session hints
+
+---
+ .../bars/src/status_bar/one_line_ui.rs        | 140 +++++++++---------
+ .../bars/src/status_bar/second_line.rs        | 123 +++++++--------
+ .../bars/src/status_bar/session_hints.rs      |  17 +--
+ 3 files changed, 139 insertions(+), 141 deletions(-)
+
+diff --git a/default-plugins/bars/src/status_bar/one_line_ui.rs b/default-plugins/bars/src/status_bar/one_line_ui.rs
+index a2470ab..8f7621b 100644
+--- a/default-plugins/bars/src/status_bar/one_line_ui.rs
++++ b/default-plugins/bars/src/status_bar/one_line_ui.rs
+@@ -1549,26 +1549,26 @@ fn get_keys_and_hints(mi: &ModeInfo) -> Vec<(String, String, Vec<KeyWithModifier
+     }
+ 
+     if mi.mode == IM::Pane { vec![
+-        (s("New"), s("New"), single_action_key(&km, &[A::NewPane{direction: None, pane_name: None, start_suppressed: false}, TO_NORMAL])),
+-        (s("Change Focus"), s("Move"),
++        (s(tr("New")), s(tr("New")), single_action_key(&km, &[A::NewPane{direction: None, pane_name: None, start_suppressed: false}, TO_NORMAL])),
++        (s(tr("Change Focus")), s(tr("Move")),
+             action_key_group(&km, &[&[A::MoveFocus{direction: Dir::Left}], &[A::MoveFocus{direction: Dir::Down}],
+                 &[A::MoveFocus{direction: Dir::Up}], &[A::MoveFocus{direction: Dir::Right}]])),
+-        (s("Close"), s("Close"), single_action_key(&km, &[A::CloseFocus, TO_NORMAL])),
+-        (s("Rename"), s("Rename"),
++        (s(tr("Close")), s(tr("Close")), single_action_key(&km, &[A::CloseFocus, TO_NORMAL])),
++        (s(tr("Rename")), s(tr("Rename")),
+             single_action_key(&km, &[A::SwitchToMode{input_mode: IM::RenamePane}, A::PaneNameInput{input: vec![0]}])),
+-        (s("Toggle Fullscreen"), s("Fullscreen"), single_action_key(&km, &[A::ToggleFocusFullscreen, TO_NORMAL])),
+-        (s("Toggle Floating"), s("Floating"),
++        (s(tr("Toggle Fullscreen")), s(tr("Fullscreen")), single_action_key(&km, &[A::ToggleFocusFullscreen, TO_NORMAL])),
++        (s(tr("Toggle Floating")), s(tr("Floating")),
+             single_action_key(&km, &[A::ToggleFloatingPanes, TO_NORMAL])),
+-        (s("Toggle Embed"), s("Embed"), single_action_key(&km, &[A::TogglePaneEmbedOrFloating, TO_NORMAL])),
+-        (s("Split Right"), s("Right"), single_action_key(&km, &[A::NewPane{direction: Some(Direction::Right), pane_name: None, start_suppressed: false}, TO_NORMAL])),
+-        (s("Split Down"), s("Down"), single_action_key(&km, &[A::NewPane{direction: Some(Direction::Down), pane_name: None, start_suppressed: false}, TO_NORMAL])),
+-        (s("Stack"), s("Stack"), single_action_key(&km, &[A::NewStackedPane{command: None, pane_name: None, near_current_pane: false, no_focus: false, tab_id: None}, TO_NORMAL])),
+-        (s("Stack titles in a row/column"), s("Stack titles"), single_action_key(&km, &[A::ToggleStackListOrientation, TO_NORMAL])),
+-        (s("Mute"), s("Mute"), single_action_key(&km, &[A::MutePane, TO_NORMAL])),
+-        (s("Ignore output"), s("Ignore"), single_action_key(&km, &[A::IgnorePaneOutput, TO_NORMAL])),
+-        (s("Watch"), s("Watch"), single_action_key(&km, &[A::WatchPane, TO_NORMAL])),
++        (s(tr("Toggle Embed")), s(tr("Embed")), single_action_key(&km, &[A::TogglePaneEmbedOrFloating, TO_NORMAL])),
++        (s(tr("Split Right")), s(tr("Right")), single_action_key(&km, &[A::NewPane{direction: Some(Direction::Right), pane_name: None, start_suppressed: false}, TO_NORMAL])),
++        (s(tr("Split Down")), s(tr("Down")), single_action_key(&km, &[A::NewPane{direction: Some(Direction::Down), pane_name: None, start_suppressed: false}, TO_NORMAL])),
++        (s(tr("Stack")), s(tr("Stack")), single_action_key(&km, &[A::NewStackedPane{command: None, pane_name: None, near_current_pane: false, no_focus: false, tab_id: None}, TO_NORMAL])),
++        (s(tr("Stack titles in a row/column")), s(tr("Stack titles")), single_action_key(&km, &[A::ToggleStackListOrientation, TO_NORMAL])),
++        (s(tr("Mute")), s(tr("Mute")), single_action_key(&km, &[A::MutePane, TO_NORMAL])),
++        (s(tr("Ignore output")), s(tr("Ignore")), single_action_key(&km, &[A::IgnorePaneOutput, TO_NORMAL])),
++        (s(tr("Watch")), s(tr("Watch")), single_action_key(&km, &[A::WatchPane, TO_NORMAL])),
+         (s(bars_hint(mi).0), s(bars_hint(mi).1), single_action_key(&km, &[A::ToggleBars{bars: vec![]}, TO_NORMAL])),
+-        (s("Select pane"), s("Select"), to_basemode_key),
++        (s(tr("Select pane")), s(tr("Select")), to_basemode_key),
+     ]} else if mi.mode == IM::Tab {
+         let old_keymap = mi.get_mode_keybinds();
+         let focus_keys_full: Vec<KeyWithModifier> = action_key_group(&old_keymap,
+@@ -1581,7 +1581,7 @@ fn get_keys_and_hints(mi: &ModeInfo) -> Vec<(String, String, Vec<KeyWithModifier
+         };
+ 
+         vec![
+-        (s("New"), s("New"), single_action_key(&km, &[A::NewTab{
++        (s(tr("New")), s(tr("New")), single_action_key(&km, &[A::NewTab{
+             tiled_layout: None,
+             floating_layouts: vec![],
+             swap_tiled_layouts: None,
+@@ -1592,78 +1592,78 @@ fn get_keys_and_hints(mi: &ModeInfo) -> Vec<(String, String, Vec<KeyWithModifier
+             initial_panes: None,
+             first_pane_unblock_condition: None,
+         }, TO_NORMAL])),
+-        (s("Change focus"), s("Move"), focus_keys),
+-        (s("Close"), s("Close"), single_action_key(&km, &[A::CloseTab, TO_NORMAL])),
+-        (s("Rename"), s("Rename"),
++        (s(tr("Change focus")), s(tr("Move")), focus_keys),
++        (s(tr("Close")), s(tr("Close")), single_action_key(&km, &[A::CloseTab, TO_NORMAL])),
++        (s(tr("Rename")), s(tr("Rename")),
+             single_action_key(&km, &[A::SwitchToMode{input_mode: IM::RenameTab}, A::TabNameInput{input: vec![0]}])),
+-        (s("Sync"), s("Sync"), single_action_key(&km, &[A::ToggleActiveSyncTab, TO_NORMAL])),
+-        (s("Break pane to new tab"), s("Break out"), single_action_key(&km, &[A::BreakPane, TO_NORMAL])),
+-        (s("Break pane left/right"), s("Break"), action_key_group(&km, &[
++        (s(tr("Sync")), s(tr("Sync")), single_action_key(&km, &[A::ToggleActiveSyncTab, TO_NORMAL])),
++        (s(tr("Break pane to new tab")), s(tr("Break out")), single_action_key(&km, &[A::BreakPane, TO_NORMAL])),
++        (s(tr("Break pane left/right")), s(tr("Break")), action_key_group(&km, &[
+             &[Action::BreakPaneLeft, TO_NORMAL],
+             &[Action::BreakPaneRight, TO_NORMAL],
+         ])),
+-        (s("Toggle"), s("Toggle"), single_action_key(&km, &[A::ToggleTab])),
+-        (s("Layout"), s("Layout"), action_key_group(&km, &[
++        (s(tr("Toggle")), s(tr("Toggle")), single_action_key(&km, &[A::ToggleTab])),
++        (s(tr("Layout")), s(tr("Layout")), action_key_group(&km, &[
+             &[A::NextSwapLayout],
+             &[A::PreviousSwapLayout],
+         ])),
+-        (s("Select pane"), s("Select"), to_basemode_key),
++        (s(tr("Select pane")), s(tr("Select")), to_basemode_key),
+     ]} else if mi.mode == IM::Resize { vec![
+-        (s("Increase/Decrease size"), s("Increase/Decrease"),
++        (s(tr("Increase/Decrease size")), s(tr("Increase/Decrease")),
+             action_key_group(&km, &[
+                 &[A::Resize{resize: Resize::Increase, direction: None}],
+                 &[A::Resize{resize: Resize::Decrease, direction: None}]
+             ])),
+-        (s("Increase to"), s("Increase"), action_key_group(&km, &[
++        (s(tr("Increase to")), s(tr("Increase")), action_key_group(&km, &[
+             &[A::Resize{resize: Resize::Increase, direction: Some(Dir::Left)}],
+             &[A::Resize{resize: Resize::Increase, direction: Some(Dir::Down)}],
+             &[A::Resize{resize: Resize::Increase, direction: Some(Dir::Up)}],
+             &[A::Resize{resize: Resize::Increase, direction: Some(Dir::Right)}]
+             ])),
+-        (s("Decrease from"), s("Decrease"), action_key_group(&km, &[
++        (s(tr("Decrease from")), s(tr("Decrease")), action_key_group(&km, &[
+             &[A::Resize{resize: Resize::Decrease, direction: Some(Dir::Left)}],
+             &[A::Resize{resize: Resize::Decrease, direction: Some(Dir::Down)}],
+             &[A::Resize{resize: Resize::Decrease, direction: Some(Dir::Up)}],
+             &[A::Resize{resize: Resize::Decrease, direction: Some(Dir::Right)}]
+             ])),
+-        (s("Select pane"), s("Select"), to_basemode_key),
++        (s(tr("Select pane")), s(tr("Select")), to_basemode_key),
+     ]} else if mi.mode == IM::Move { vec![
+-        (s("Switch Location"), s("Move"), action_key_group(&km, &[
++        (s(tr("Switch Location")), s(tr("Move")), action_key_group(&km, &[
+             &[Action::MovePane{direction: Some(Dir::Left)}], &[Action::MovePane{direction: Some(Dir::Down)}],
+             &[Action::MovePane{direction: Some(Dir::Up)}], &[Action::MovePane{direction: Some(Dir::Right)}]])),
+-        (s("When done"), s("Back"), to_basemode_key),
++        (s(tr("When done")), s(tr("Back")), to_basemode_key),
+     ]} else if mi.mode == IM::Scroll { vec![
+-        (s("Enter search term"), s("Search"),
++        (s(tr("Enter search term")), s(tr("Search")),
+             action_key(&km, &[A::SwitchToMode{input_mode: IM::EnterSearch}, A::SearchInput{input: vec![0]}])),
+-        (s("Scroll"), s("Scroll"), action_key_group(&km, &[
++        (s(tr("Scroll")), s(tr("Scroll")), action_key_group(&km, &[
+             &[Action::ScrollDown], &[Action::ScrollUp],
+             &[Action::PageScrollDown], &[Action::PageScrollUp],
+             &[Action::HalfPageScrollDown], &[Action::HalfPageScrollUp]])),
+-        (s("Edit scrollback in default editor"), s("Edit"),
++        (s(tr("Edit scrollback in default editor")), s(tr("Edit")),
+             single_action_key(&km, &[Action::EditScrollback { ansi: false }, TO_NORMAL])),
+-        (s("Select pane"), s("Select"), to_basemode_key),
+-        (s("Scroll commands"), s("Commands"),
++        (s(tr("Select pane")), s(tr("Select")), to_basemode_key),
++        (s(tr("Scroll commands")), s(tr("Commands")),
+             action_key_group(&km, &[&[Action::ScrollToPreviousPrompt], &[Action::ScrollToNextPrompt]])),
+     ]} else if mi.mode == IM::EnterSearch { vec![
+-        (s("When done"), s("Done"), action_key(&km, &[A::SwitchToMode{input_mode: IM::Search}])),
+-        (s("Cancel"), s("Cancel"),
++        (s(tr("When done")), s(tr("Done")), action_key(&km, &[A::SwitchToMode{input_mode: IM::Search}])),
++        (s(tr("Cancel")), s(tr("Cancel")),
+             action_key(&km, &[A::SearchInput{input: vec![27]}, A::SwitchToMode{input_mode: IM::Scroll}])),
+     ]} else if mi.mode == IM::Search { vec![
+-        (s("Enter Search term"), s("Search"),
++        (s(tr("Enter Search term")), s(tr("Search")),
+             action_key(&km, &[A::SwitchToMode{input_mode: IM::EnterSearch}, A::SearchInput{input: vec![0]}])),
+-        (s("Scroll"), s("Scroll"),
++        (s(tr("Scroll")), s(tr("Scroll")),
+             action_key_group(&km, &[&[Action::ScrollDown], &[Action::ScrollUp]])),
+-        (s("Scroll page"), s("Scroll"),
++        (s(tr("Scroll page")), s(tr("Scroll")),
+             action_key_group(&km, &[&[Action::PageScrollDown], &[Action::PageScrollUp]])),
+-        (s("Scroll half page"), s("Scroll"),
++        (s(tr("Scroll half page")), s(tr("Scroll")),
+             action_key_group(&km, &[&[Action::HalfPageScrollDown], &[Action::HalfPageScrollUp]])),
+-        (s("Search down"), s("Down"), action_key(&km, &[A::Search{direction: SDir::Down}])),
+-        (s("Search up"), s("Up"), action_key(&km, &[A::Search{direction: SDir::Up}])),
+-        (s("Case sensitive"), s("Case"),
++        (s(tr("Search down")), s(tr("Down")), action_key(&km, &[A::Search{direction: SDir::Down}])),
++        (s(tr("Search up")), s(tr("Up")), action_key(&km, &[A::Search{direction: SDir::Up}])),
++        (s(tr("Case sensitive")), s(tr("Case")),
+             action_key(&km, &[A::SearchToggleOption{option: SOpt::CaseSensitivity}])),
+-        (s("Wrap"), s("Wrap"),
++        (s(tr("Wrap")), s(tr("Wrap")),
+             action_key(&km, &[A::SearchToggleOption{option: SOpt::Wrap}])),
+-        (s("Whole words"), s("Whole"),
++        (s(tr("Whole words")), s(tr("Whole")),
+             action_key(&km, &[A::SearchToggleOption{option: SOpt::WholeWord}])),
+     ]} else if mi.mode == IM::Session {
+         let hints = crate::status_bar::session_hints::session_hints();
+@@ -1676,32 +1676,32 @@ fn get_keys_and_hints(mi: &ModeInfo) -> Vec<(String, String, Vec<KeyWithModifier
+         let mut hints_list = vec![];
+         if let Some(previous) = hints.previous.as_ref() {
+             let previous = sanitize_display_text(previous);
+-            hints_list.push((format!("back to {}", previous), s("Back"), toggle_keys.into_iter().take(1).collect()));
+-            hints_list.push((s("history"), s("History"), history_keys));
++            hints_list.push((format!("back to {}", previous), s(tr("Back")), toggle_keys.into_iter().take(1).collect()));
++            hints_list.push((s(tr("history")), s(tr("History")), history_keys));
+         }
+-        hints_list.push((s("next item"), s("Next"), next_keys.into_iter().take(1).collect()));
++        hints_list.push((s(tr("next item")), s(tr("Next")), next_keys.into_iter().take(1).collect()));
+         hints_list.extend(vec![
+-        (s("Inbox"), s("Inbox"), single_action_key(&km, &[A::ToggleSessionCard])),
+-        (s("Detach"), s("Detach"), action_key(&km, &[Action::Detach])),
+-        (s("Rename"), s("Rename"),
++        (s(tr("Inbox")), s(tr("Inbox")), single_action_key(&km, &[A::ToggleSessionCard])),
++        (s(tr("Detach")), s(tr("Detach")), action_key(&km, &[Action::Detach])),
++        (s(tr("Rename")), s(tr("Rename")),
+             single_action_key(&km, &[A::SwitchToMode{input_mode: IM::RenameSession}, A::SessionNameInput{input: vec![0]}])),
+-        (s("Session Manager"), s("Manager"), session_manager_key(&km)),
+-        (s("Share"), s("Share"), share_key(&km)),
+-        (s("Settings"), s("Settings"), configuration_key(&km)),
+-        (s("Layout Manager"), s("Layouts"), layout_manager_key(&km)),
+-        (s("Plugin Manager"), s("Plugins"), plugin_manager_key(&km)),
+-        (s("About"), s("About"), about_key(&km)),
+-        (s("Select pane"), s("Select"), to_basemode_key),
++        (s(tr("Session Manager")), s(tr("Manager")), session_manager_key(&km)),
++        (s(tr("Share")), s(tr("Share")), share_key(&km)),
++        (s(tr("Settings")), s(tr("Settings")), configuration_key(&km)),
++        (s(tr("Layout Manager")), s(tr("Layouts")), layout_manager_key(&km)),
++        (s(tr("Plugin Manager")), s(tr("Plugins")), plugin_manager_key(&km)),
++        (s(tr("About")), s(tr("About")), about_key(&km)),
++        (s(tr("Select pane")), s(tr("Select")), to_basemode_key),
+         ]);
+         hints_list
+     } else if mi.mode == IM::Tmux { vec![
+-        (s("Move focus"), s("Move"), action_key_group(&km, &[
++        (s(tr("Move focus")), s(tr("Move")), action_key_group(&km, &[
+             &[A::MoveFocus{direction: Dir::Left}], &[A::MoveFocus{direction: Dir::Down}],
+             &[A::MoveFocus{direction: Dir::Up}], &[A::MoveFocus{direction: Dir::Right}]])),
+-        (s("Split down"), s("Down"), action_key(&km, &[A::NewPane{direction: Some(Dir::Down), pane_name: None, start_suppressed: false}, TO_NORMAL])),
+-        (s("Split right"), s("Right"), action_key(&km, &[A::NewPane{direction: Some(Dir::Right), pane_name: None, start_suppressed: false}, TO_NORMAL])),
+-        (s("Fullscreen"), s("Fullscreen"), action_key(&km, &[A::ToggleFocusFullscreen, TO_NORMAL])),
+-        (s("New tab"), s("New"), action_key(&km, &[A::NewTab{
++        (s(tr("Split down")), s(tr("Down")), action_key(&km, &[A::NewPane{direction: Some(Dir::Down), pane_name: None, start_suppressed: false}, TO_NORMAL])),
++        (s(tr("Split right")), s(tr("Right")), action_key(&km, &[A::NewPane{direction: Some(Dir::Right), pane_name: None, start_suppressed: false}, TO_NORMAL])),
++        (s(tr("Fullscreen")), s(tr("Fullscreen")), action_key(&km, &[A::ToggleFocusFullscreen, TO_NORMAL])),
++        (s(tr("New tab")), s(tr("New")), action_key(&km, &[A::NewTab{
+             tiled_layout: None,
+             floating_layouts: vec![],
+             swap_tiled_layouts: None,
+@@ -1712,13 +1712,13 @@ fn get_keys_and_hints(mi: &ModeInfo) -> Vec<(String, String, Vec<KeyWithModifier
+             initial_panes: None,
+             first_pane_unblock_condition: None,
+         }, TO_NORMAL])),
+-        (s("Rename tab"), s("Rename"),
++        (s(tr("Rename tab")), s(tr("Rename")),
+             action_key(&km, &[A::SwitchToMode{input_mode: IM::RenameTab}, A::TabNameInput{input: vec![0]}])),
+-        (s("Previous Tab"), s("Previous"), action_key(&km, &[A::GoToPreviousTab, TO_NORMAL])),
+-        (s("Next Tab"), s("Next"), action_key(&km, &[A::GoToNextTab, TO_NORMAL])),
+-        (s("Select pane"), s("Select"), to_basemode_key),
++        (s(tr("Previous Tab")), s(tr("Previous")), action_key(&km, &[A::GoToPreviousTab, TO_NORMAL])),
++        (s(tr("Next Tab")), s(tr("Next")), action_key(&km, &[A::GoToNextTab, TO_NORMAL])),
++        (s(tr("Select pane")), s(tr("Select")), to_basemode_key),
+     ]} else if matches!(mi.mode, IM::RenamePane | IM::RenameTab | IM::RenameSession) { vec![
+-        (s("When done"), s("Done"), to_basemode_key),
++        (s(tr("When done")), s(tr("Done")), to_basemode_key),
+     ]} else { vec![] }
+ }
+ 
+diff --git a/default-plugins/bars/src/status_bar/second_line.rs b/default-plugins/bars/src/status_bar/second_line.rs
+index 2c281f8..3259a80 100644
+--- a/default-plugins/bars/src/status_bar/second_line.rs
++++ b/default-plugins/bars/src/status_bar/second_line.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::tr;
+ use crate::status_bar::unstyled_len;
+ use ansi_term::{
+     ANSIString, ANSIStrings,
+@@ -117,23 +118,23 @@ fn get_keys_and_hints(mi: &ModeInfo) -> Vec<(String, String, Vec<KeyWithModifier
+     }
+ 
+     if mi.mode == IM::Pane { vec![
+-        (s("New"), s("New"), action_key(&km, &[A::NewPane{direction: None, pane_name: None, start_suppressed: false}, TO_NORMAL])),
+-        (s("Change Focus"), s("Move"),
++        (s(tr("New")), s(tr("New")), action_key(&km, &[A::NewPane{direction: None, pane_name: None, start_suppressed: false}, TO_NORMAL])),
++        (s(tr("Change Focus")), s(tr("Move")),
+             action_key_group(&km, &[&[A::MoveFocus{direction: Dir::Left}], &[A::MoveFocus{direction: Dir::Down}],
+                 &[A::MoveFocus{direction: Dir::Up}], &[A::MoveFocus{direction: Dir::Right}]])),
+-        (s("Close"), s("Close"), action_key(&km, &[A::CloseFocus, TO_NORMAL])),
+-        (s("Rename"), s("Rename"),
++        (s(tr("Close")), s(tr("Close")), action_key(&km, &[A::CloseFocus, TO_NORMAL])),
++        (s(tr("Rename")), s(tr("Rename")),
+             action_key(&km, &[A::SwitchToMode{input_mode: IM::RenamePane}, A::PaneNameInput{input: vec![0]}])),
+-        (s("Toggle Fullscreen"), s("Fullscreen"), action_key(&km, &[A::ToggleFocusFullscreen, TO_NORMAL])),
+-        (s("Toggle Floating"), s("Floating"),
++        (s(tr("Toggle Fullscreen")), s(tr("Fullscreen")), action_key(&km, &[A::ToggleFocusFullscreen, TO_NORMAL])),
++        (s(tr("Toggle Floating")), s(tr("Floating")),
+             action_key(&km, &[A::ToggleFloatingPanes, TO_NORMAL])),
+-        (s("Toggle Embed"), s("Embed"), action_key(&km, &[A::TogglePaneEmbedOrFloating, TO_NORMAL])),
+-        (s("Stack titles in a row/column"), s("Stack titles"), action_key(&km, &[A::ToggleStackListOrientation, TO_NORMAL])),
+-        (s("Mute"), s("Mute"), action_key(&km, &[A::MutePane, TO_NORMAL])),
+-        (s("Ignore output"), s("Ignore"), action_key(&km, &[A::IgnorePaneOutput, TO_NORMAL])),
+-        (s("Watch"), s("Watch"), action_key(&km, &[A::WatchPane, TO_NORMAL])),
++        (s(tr("Toggle Embed")), s(tr("Embed")), action_key(&km, &[A::TogglePaneEmbedOrFloating, TO_NORMAL])),
++        (s(tr("Stack titles in a row/column")), s(tr("Stack titles")), action_key(&km, &[A::ToggleStackListOrientation, TO_NORMAL])),
++        (s(tr("Mute")), s(tr("Mute")), action_key(&km, &[A::MutePane, TO_NORMAL])),
++        (s(tr("Ignore output")), s(tr("Ignore")), action_key(&km, &[A::IgnorePaneOutput, TO_NORMAL])),
++        (s(tr("Watch")), s(tr("Watch")), action_key(&km, &[A::WatchPane, TO_NORMAL])),
+         (s(bars_hint(mi).0), s(bars_hint(mi).1), action_key(&km, &[A::ToggleBars{bars: vec![]}, TO_NORMAL])),
+-        (s("Select pane"), s("Select"), to_normal_key),
++        (s(tr("Select pane")), s(tr("Select")), to_normal_key),
+     ]} else if mi.mode == IM::Tab {
+         let old_keymap = mi.get_mode_keybinds();
+         let focus_keys_full: Vec<KeyWithModifier> = action_key_group(&old_keymap,
+@@ -146,7 +147,7 @@ fn get_keys_and_hints(mi: &ModeInfo) -> Vec<(String, String, Vec<KeyWithModifier
+         };
+ 
+         vec![
+-        (s("New"), s("New"), action_key(&km, &[A::NewTab{
++        (s(tr("New")), s(tr("New")), action_key(&km, &[A::NewTab{
+             tiled_layout: None,
+             floating_layouts: vec![],
+             swap_tiled_layouts: None,
+@@ -157,94 +158,94 @@ fn get_keys_and_hints(mi: &ModeInfo) -> Vec<(String, String, Vec<KeyWithModifier
+             initial_panes: None,
+             first_pane_unblock_condition: None,
+         }, TO_NORMAL])),
+-        (s("Change focus"), s("Move"), focus_keys),
+-        (s("Close"), s("Close"), action_key(&km, &[A::CloseTab, TO_NORMAL])),
+-        (s("Rename"), s("Rename"),
++        (s(tr("Change focus")), s(tr("Move")), focus_keys),
++        (s(tr("Close")), s(tr("Close")), action_key(&km, &[A::CloseTab, TO_NORMAL])),
++        (s(tr("Rename")), s(tr("Rename")),
+             action_key(&km, &[A::SwitchToMode{input_mode: IM::RenameTab}, A::TabNameInput{input: vec![0]}])),
+-        (s("Sync"), s("Sync"), action_key(&km, &[A::ToggleActiveSyncTab, TO_NORMAL])),
+-        (s("Break pane to new tab"), s("Break out"), action_key(&km, &[A::BreakPane, TO_NORMAL])),
+-        (s("Break pane left/right"), s("Break"), action_key_group(&km, &[
++        (s(tr("Sync")), s(tr("Sync")), action_key(&km, &[A::ToggleActiveSyncTab, TO_NORMAL])),
++        (s(tr("Break pane to new tab")), s(tr("Break out")), action_key(&km, &[A::BreakPane, TO_NORMAL])),
++        (s(tr("Break pane left/right")), s(tr("Break")), action_key_group(&km, &[
+             &[Action::BreakPaneLeft, TO_NORMAL],
+             &[Action::BreakPaneRight, TO_NORMAL],
+         ])),
+-        (s("Toggle"), s("Toggle"), action_key(&km, &[A::ToggleTab])),
+-        (s("Layout"), s("Layout"), action_key_group(&km, &[
++        (s(tr("Toggle")), s(tr("Toggle")), action_key(&km, &[A::ToggleTab])),
++        (s(tr("Layout")), s(tr("Layout")), action_key_group(&km, &[
+             &[A::NextSwapLayout],
+             &[A::PreviousSwapLayout],
+         ])),
+-        (s("Select pane"), s("Select"), to_normal_key),
++        (s(tr("Select pane")), s(tr("Select")), to_normal_key),
+     ]} else if mi.mode == IM::Resize { vec![
+-        (s("Increase/Decrease size"), s("Increase/Decrease"),
++        (s(tr("Increase/Decrease size")), s(tr("Increase/Decrease")),
+             action_key_group(&km, &[
+                 &[A::Resize{resize: Resize::Increase, direction: None}],
+                 &[A::Resize{resize: Resize::Decrease, direction: None}]
+             ])),
+-        (s("Increase to"), s("Increase"), action_key_group(&km, &[
++        (s(tr("Increase to")), s(tr("Increase")), action_key_group(&km, &[
+             &[A::Resize{resize: Resize::Increase, direction: Some(Dir::Left)}],
+             &[A::Resize{resize: Resize::Increase, direction: Some(Dir::Down)}],
+             &[A::Resize{resize: Resize::Increase, direction: Some(Dir::Up)}],
+             &[A::Resize{resize: Resize::Increase, direction: Some(Dir::Right)}]
+             ])),
+-        (s("Decrease from"), s("Decrease"), action_key_group(&km, &[
++        (s(tr("Decrease from")), s(tr("Decrease")), action_key_group(&km, &[
+             &[A::Resize{resize: Resize::Decrease, direction: Some(Dir::Left)}],
+             &[A::Resize{resize: Resize::Decrease, direction: Some(Dir::Down)}],
+             &[A::Resize{resize: Resize::Decrease, direction: Some(Dir::Up)}],
+             &[A::Resize{resize: Resize::Decrease, direction: Some(Dir::Right)}]
+             ])),
+-        (s("Select pane"), s("Select"), to_normal_key),
++        (s(tr("Select pane")), s(tr("Select")), to_normal_key),
+     ]} else if mi.mode == IM::Move { vec![
+-        (s("Switch Location"), s("Move"), action_key_group(&km, &[
++        (s(tr("Switch Location")), s(tr("Move")), action_key_group(&km, &[
+             &[Action::MovePane{direction: Some(Dir::Left)}], &[Action::MovePane{direction: Some(Dir::Down)}],
+             &[Action::MovePane{direction: Some(Dir::Up)}], &[Action::MovePane{direction: Some(Dir::Right)}]])),
+     ]} else if mi.mode == IM::Scroll { vec![
+-        (s("Enter search term"), s("Search"),
++        (s(tr("Enter search term")), s(tr("Search")),
+             action_key(&km, &[A::SwitchToMode{input_mode: IM::EnterSearch}, A::SearchInput{input: vec![0]}])),
+-        (s("Scroll"), s("Scroll"),
++        (s(tr("Scroll")), s(tr("Scroll")),
+             action_key_group(&km, &[&[Action::ScrollDown], &[Action::ScrollUp]])),
+-        (s("Scroll page"), s("Scroll"),
++        (s(tr("Scroll page")), s(tr("Scroll")),
+             action_key_group(&km, &[&[Action::PageScrollDown], &[Action::PageScrollUp]])),
+-        (s("Scroll half page"), s("Scroll"),
++        (s(tr("Scroll half page")), s(tr("Scroll")),
+             action_key_group(&km, &[&[Action::HalfPageScrollDown], &[Action::HalfPageScrollUp]])),
+-        (s("Edit scrollback in default editor"), s("Edit"),
++        (s(tr("Edit scrollback in default editor")), s(tr("Edit")),
+             action_key(&km, &[Action::EditScrollback { ansi: false }, TO_NORMAL])),
+-        (s("Select pane"), s("Select"), to_normal_key),
++        (s(tr("Select pane")), s(tr("Select")), to_normal_key),
+     ]} else if mi.mode == IM::EnterSearch { vec![
+-        (s("When done"), s("Done"), action_key(&km, &[A::SwitchToMode{input_mode: IM::Search}])),
+-        (s("Cancel"), s("Cancel"),
++        (s(tr("When done")), s(tr("Done")), action_key(&km, &[A::SwitchToMode{input_mode: IM::Search}])),
++        (s(tr("Cancel")), s(tr("Cancel")),
+             action_key(&km, &[A::SearchInput{input: vec![27]}, A::SwitchToMode{input_mode: IM::Scroll}])),
+     ]} else if mi.mode == IM::Search { vec![
+-        (s("Enter Search term"), s("Search"),
++        (s(tr("Enter Search term")), s(tr("Search")),
+             action_key(&km, &[A::SwitchToMode{input_mode: IM::EnterSearch}, A::SearchInput{input: vec![0]}])),
+-        (s("Scroll"), s("Scroll"),
++        (s(tr("Scroll")), s(tr("Scroll")),
+             action_key_group(&km, &[&[Action::ScrollDown], &[Action::ScrollUp]])),
+-        (s("Scroll page"), s("Scroll"),
++        (s(tr("Scroll page")), s(tr("Scroll")),
+             action_key_group(&km, &[&[Action::PageScrollDown], &[Action::PageScrollUp]])),
+-        (s("Scroll half page"), s("Scroll"),
++        (s(tr("Scroll half page")), s(tr("Scroll")),
+             action_key_group(&km, &[&[Action::HalfPageScrollDown], &[Action::HalfPageScrollUp]])),
+-        (s("Search down"), s("Down"), action_key(&km, &[A::Search{direction: SDir::Down}])),
+-        (s("Search up"), s("Up"), action_key(&km, &[A::Search{direction: SDir::Up}])),
+-        (s("Case sensitive"), s("Case"),
++        (s(tr("Search down")), s(tr("Down")), action_key(&km, &[A::Search{direction: SDir::Down}])),
++        (s(tr("Search up")), s(tr("Up")), action_key(&km, &[A::Search{direction: SDir::Up}])),
++        (s(tr("Case sensitive")), s(tr("Case")),
+             action_key(&km, &[A::SearchToggleOption{option: SOpt::CaseSensitivity}])),
+-        (s("Wrap"), s("Wrap"),
++        (s(tr("Wrap")), s(tr("Wrap")),
+             action_key(&km, &[A::SearchToggleOption{option: SOpt::Wrap}])),
+-        (s("Whole words"), s("Whole"),
++        (s(tr("Whole words")), s(tr("Whole")),
+             action_key(&km, &[A::SearchToggleOption{option: SOpt::WholeWord}])),
+     ]} else if mi.mode == IM::Session { vec![
+-        (s("Next item"), s("Next"), action_key(&km, &[A::GoToNextAttention, TO_NORMAL])),
+-        (s("Inbox"), s("Inbox"), action_key(&km, &[A::ToggleSessionCard, TO_NORMAL])),
+-        (s("Detach"), s("Detach"), action_key(&km, &[Action::Detach])),
+-        (s("Rename"), s("Rename"),
++        (s(tr("Next item")), s(tr("Next")), action_key(&km, &[A::GoToNextAttention, TO_NORMAL])),
++        (s(tr("Inbox")), s(tr("Inbox")), action_key(&km, &[A::ToggleSessionCard, TO_NORMAL])),
++        (s(tr("Detach")), s(tr("Detach")), action_key(&km, &[Action::Detach])),
++        (s(tr("Rename")), s(tr("Rename")),
+             action_key(&km, &[A::SwitchToMode{input_mode: IM::RenameSession}, A::SessionNameInput{input: vec![0]}])),
+-        (s("Session Manager"), s("Manager"), action_key(&km, &[A::LaunchOrFocusPlugin{plugin: Default::default(), should_float: true, move_to_focused_tab: true, should_open_in_place: false, close_replaced_pane: false, skip_cache: false, tab_id: None}, TO_NORMAL])),
+-        (s("Select pane"), s("Select"), to_normal_key),
++        (s(tr("Session Manager")), s(tr("Manager")), action_key(&km, &[A::LaunchOrFocusPlugin{plugin: Default::default(), should_float: true, move_to_focused_tab: true, should_open_in_place: false, close_replaced_pane: false, skip_cache: false, tab_id: None}, TO_NORMAL])),
++        (s(tr("Select pane")), s(tr("Select")), to_normal_key),
+     ]} else if mi.mode == IM::Tmux { vec![
+-        (s("Move focus"), s("Move"), action_key_group(&km, &[
++        (s(tr("Move focus")), s(tr("Move")), action_key_group(&km, &[
+             &[A::MoveFocus{direction: Dir::Left}], &[A::MoveFocus{direction: Dir::Down}],
+             &[A::MoveFocus{direction: Dir::Up}], &[A::MoveFocus{direction: Dir::Right}]])),
+-        (s("Split down"), s("Down"), action_key(&km, &[A::NewPane{direction: Some(Dir::Down), pane_name: None, start_suppressed: false}, TO_NORMAL])),
+-        (s("Split right"), s("Right"), action_key(&km, &[A::NewPane{direction: Some(Dir::Right), pane_name: None, start_suppressed: false}, TO_NORMAL])),
+-        (s("Fullscreen"), s("Fullscreen"), action_key(&km, &[A::ToggleFocusFullscreen, TO_NORMAL])),
+-        (s("New tab"), s("New"), action_key(&km, &[A::NewTab{
++        (s(tr("Split down")), s(tr("Down")), action_key(&km, &[A::NewPane{direction: Some(Dir::Down), pane_name: None, start_suppressed: false}, TO_NORMAL])),
++        (s(tr("Split right")), s(tr("Right")), action_key(&km, &[A::NewPane{direction: Some(Dir::Right), pane_name: None, start_suppressed: false}, TO_NORMAL])),
++        (s(tr("Fullscreen")), s(tr("Fullscreen")), action_key(&km, &[A::ToggleFocusFullscreen, TO_NORMAL])),
++        (s(tr("New tab")), s(tr("New")), action_key(&km, &[A::NewTab{
+             tiled_layout: None,
+             floating_layouts: vec![],
+             swap_tiled_layouts: None,
+@@ -255,14 +256,14 @@ fn get_keys_and_hints(mi: &ModeInfo) -> Vec<(String, String, Vec<KeyWithModifier
+             initial_panes: None,
+             first_pane_unblock_condition: None,
+         }, TO_NORMAL])),
+-        (s("Rename tab"), s("Rename"),
++        (s(tr("Rename tab")), s(tr("Rename")),
+             action_key(&km, &[A::SwitchToMode{input_mode: IM::RenameTab}, A::TabNameInput{input: vec![0]}])),
+-        (s("Previous Tab"), s("Previous"), action_key(&km, &[A::GoToPreviousTab, TO_NORMAL])),
+-        (s("Next Tab"), s("Next"), action_key(&km, &[A::GoToNextTab, TO_NORMAL])),
+-        (s("Select pane"), s("Select"), to_normal_key),
++        (s(tr("Previous Tab")), s(tr("Previous")), action_key(&km, &[A::GoToPreviousTab, TO_NORMAL])),
++        (s(tr("Next Tab")), s(tr("Next")), action_key(&km, &[A::GoToNextTab, TO_NORMAL])),
++        (s(tr("Select pane")), s(tr("Select")), to_normal_key),
+     ]} else if matches!(mi.mode, IM::RenamePane | IM::RenameTab | IM::RenameSession) { vec![
+-        (s("When done"), s("Done"), to_normal_key),
+-        (s("Select pane"), s("Select"), action_key_group(&km, &[
++        (s(tr("When done")), s(tr("Done")), to_normal_key),
++        (s(tr("Select pane")), s(tr("Select")), action_key_group(&km, &[
+             &[A::MoveFocus{direction: Dir::Left}], &[A::MoveFocus{direction: Dir::Down}],
+             &[A::MoveFocus{direction: Dir::Up}], &[A::MoveFocus{direction: Dir::Right}]])),
+     ]} else { vec![] }
+diff --git a/default-plugins/bars/src/status_bar/session_hints.rs b/default-plugins/bars/src/status_bar/session_hints.rs
+index cf726d2..5bbb12d 100644
+--- a/default-plugins/bars/src/status_bar/session_hints.rs
++++ b/default-plugins/bars/src/status_bar/session_hints.rs
+@@ -1,3 +1,4 @@
++use zellij_i18n::{tr, trf};
+ use std::cell::RefCell;
+ use zellij_tile::prelude::actions::Action;
+ use zellij_tile::prelude::*;
+@@ -136,9 +137,9 @@ pub fn compute_session_hints(
+     let previous = history.and_then(|h| h.previous.clone());
+     let pane_note = focused_pane.and_then(|pane| {
+         if pane.attention.is_muted() {
+-            Some("pane muted".to_owned())
++            Some(tr("pane muted").to_owned())
+         } else if pane.attention.watched {
+-            Some("watching this pane".to_owned())
++            Some(tr("watching this pane").to_owned())
+         } else {
+             None
+         }
+@@ -151,19 +152,15 @@ pub fn compute_session_hints(
+         let from = history.arrived_from.as_ref()?;
+         if done_showing && done_is_due(Some(history), global, focused_pane, now_ms) {
+             return previous.as_ref().map(|previous| match keys {
+-                Some(keys) => format!(
+-                    "Done · {} back to {}",
+-                    keys,
+-                    sanitize_display_text(previous)
+-                ),
+-                None => "Done".to_owned(),
++                Some(keys) => trf("Done · {keys} back to {previous}", &[("keys", keys), ("previous", &sanitize_display_text(previous))]),
++                None => tr("Done").to_owned(),
+             });
+         }
+         if arrived_too_recently(history, now_ms) {
+             let from = sanitize_display_text(from);
+             Some(match keys {
+-                Some(keys) => format!("Switched from {} · {} back", from, keys),
+-                None => format!("Switched from {}", from),
++                Some(keys) => trf("Switched from {from} · {keys} back", &[("from", &from), ("keys", keys)]),
++                None => trf("Switched from {from}", &[("from", &from)]),
+             })
+         } else {
+             None
