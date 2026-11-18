@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Zellij 本身的问题
+    url: https://github.com/zellij-org/zellij/issues
+    about: 与汉化无关的 Zellij 缺陷和功能请提到上游。

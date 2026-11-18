@@ -12,7 +12,7 @@
 | 构建 | `tools/zhcn.py build` | check + apply；`cargo xtask ci build-release` | 补丁冲突/编译失败即中止，不产出二进制 |
 | 周期检测 | `tools/zhcn.py upstream-status` | `git ls-remote --tags` 列出 ≥ 基线的新标签 | 只报告，不自动适配 |
 | 适配探测 | `tools/zhcn.py probe --tag vX.Y.Z` | 克隆目标标签；逐补丁 `git apply --check`；补丁触及文件是否被上游删除；zellij-tile 等接口 crate 版本差异；界面文字候选差异（启发式） | 有补丁失败或文件缺失 → 退出码 2，结论"未适配"；报告写入 `.work/probe-<tag>/PROBE-REPORT.json` |
-| 译文核对 | `tools/zhcn.py report` | 补丁树中 `tr()/tr_ctx()/trf()/t()`/配置标签的键与目录对比：缺译、未使用、占位符不一致 | 占位符不一致 → 非零退出；缺译仅警告（运行时回退英文） |
+| 译文核对 | `tools/zhcn.py report` | 补丁树中 `tr()/tr_ctx()/trf()/t()`/配置标签的键与目录对比：缺译、未使用、占位符不一致 | 占位符不一致 → 非零退出；缺译仅警告（运行时回退英文）；`--strict` 下缺译/冗余也非零（CI 使用）。需要已应用补丁的工作区 |
 
 探测结果只会被报告或用于生成待审改动；不会自动改 `upstream.toml`，
 不会自动构建，更不会触碰用户安装。未经验证的新版本标记为"未适配"。
@@ -22,7 +22,7 @@
 | 上游版本 | 基线提交 | 状态 | 证据 |
 | --- | --- | --- | --- |
 | v0.46.0 | `aedee21cb0d58d716496e7f6c66ba0b6f08045d8` | **已适配** | 19 个补丁全部应用；构建通过；测试与运行证据见 `.work/evidence/` 与 docs/05（测试记录） |
-| v0.45.1 | `efd8fd5a89a20c07a111d248ad7fce53848d2c18` | 未适配（探测结论） | `probe --tag v0.45.1`：17 个补丁中 15 个应用失败、52 个补丁触及的文件在上游不存在（插件文件布局不同），退出码 2 |
+| v0.45.1 | `efd8fd5a89a20c07a111d248ad7fce53848d2c18` | 未适配（探测结论） | `probe --tag v0.45.1`（演练时补丁队列为 17 个）：15 个应用失败、52 个补丁触及的文件在上游不存在（插件文件布局不同），退出码 2 |
 
 未列出的版本一律视为"未适配"：不保证补丁可应用，也不保证功能兼容。
 
@@ -64,10 +64,12 @@
 
 `.github/workflows/zh-cn-ci.yml`：
 
-- `check` 作业（push/PR）：`check` + `report` + `cargo test`（zellij-i18n）。
-  补丁无法应用或目录不一致时失败 → 不产生任何发布物。
-- `build` 作业（push/PR）：`tools/zhcn.py build` 完整构建，产出二进制与
-  buildinfo 作为 artifact（仅构建产物，不发布、不部署）。
+- `check` 作业（push/PR）：工具单元测试 + `check` + `cargo test`（zellij-i18n）。
+  补丁无法应用或目录非法时失败 → 不产生任何发布物。
+- `build` 作业（push/PR）：`tools/zhcn.py build` 完整构建，随后 `report --strict`
+  （补丁树中的键与译文目录必须完全对应），产出二进制与 buildinfo 作为
+  artifact（仅构建产物，不发布、不部署）。
+- 注：CI 配置尚未在 GitHub 上实际运行过，首次 push 后需要观察并修正。
 - `upstream-watch` 作业（每周定时）：`upstream-status` 列出新标签；若存在
   未适配标签则 `probe` 最新一个并把 `PROBE-REPORT.json` 作为 artifact，
   供人工评审后再决定是否适配。失败不会自动标记任何版本为受支持。

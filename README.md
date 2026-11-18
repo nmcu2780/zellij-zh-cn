@@ -68,6 +68,10 @@ Arch 用户可参考 [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD)（草�
 | [coverage](docs/coverage.md) | 按区域的翻译覆盖清单 |
 | [TASKS](docs/TASKS.md) | 项目最初的任务书（历史记录） |
 
+## 参与
+
+欢迎改进译文、报告问题：见 [CONTRIBUTING](CONTRIBUTING.md)。安全问题见 [SECURITY](SECURITY.md)，版本变化见 [CHANGELOG](CHANGELOG.md)。
+
 ## 许可证
 
 [MIT](LICENSE)。补丁基于上游 Zellij（MIT，Copyright (c) 2020 Zellij contributors），其版权声明已保留。本项目不包含任何第三方汉化项目的代码。

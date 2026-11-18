@@ -321,6 +321,9 @@ def _check_worktree_clean(wd: Path):
 def _check_branch_matches_patches(wd: Path, commit: str, pdir: Path):
     if git("rev-parse", "--verify", "--quiet", "zh-cn", cwd=wd).returncode != 0:
         return  # 分支还不存在，首次 apply
+    ahead = git("rev-list", "--count", f"{commit}..zh-cn", cwd=wd)
+    if ahead.returncode == 0 and ahead.stdout.strip() == "0":
+        return  # 分支停在基线上（例如上次 apply 失败后恢复的结果），没有可丢失的工作
 
     def norm(text: str) -> str:
         return "\n".join(
@@ -378,13 +381,20 @@ def cmd_apply(args) -> int:
         raise SystemExit(f"清理工作区失败：{res.stderr}")
 
     eprint(f">> 应用 {len(patches)} 个补丁（git am）")
-    res = git("am", *[str(p) for p in patches], cwd=wd)
+    # 提供固定的提交身份：干净环境（CI、新机器）没有全局 git 身份，
+    # git am 会因“无法自动探测邮件地址”而失败。补丁自带作者信息，不受影响。
+    res = git(
+        "-c", "user.name=zellij-zh-cn",
+        "-c", "user.email=zellij-zh-cn@localhost",
+        "am", *[str(p) for p in patches], cwd=wd,
+    )
     if res.returncode != 0:
         eprint(res.stderr)
         git("am", "--abort", cwd=wd)
         raise SystemExit(
             "补丁应用失败，已中止并恢复 zh-cn 分支到基线。\n"
-            "该上游版本与补丁队列不兼容，已拒绝构建。系统安装的 zellij 不受影响。"
+            "原因见上方 git 输出：若提示冲突或 patch does not apply，则该上游版本与补丁队列不兼容，"
+            "已拒绝构建；其他提示多为环境问题。系统安装的 zellij 不受影响。"
         )
 
     # 拷贝 zellij-i18n crate 并生成 Rust 译文目录
@@ -832,6 +842,13 @@ def cmd_report(args) -> int:
     if entries is None:
         raise SystemExit("译文目录无法解析：" + "；".join(errors))
 
+    # report 扫描的是“已应用补丁”的源码；对未打补丁的上游只会统计到几乎为零的键，
+    # 并把整本目录误报为未使用，所以直接拒绝，避免给出假结论。
+    if not (wd / "zellij-i18n").is_dir():
+        raise SystemExit(
+            f"工作区 {wd} 尚未应用补丁，无法对照译文键。请先运行 tools/zhcn.py apply（或 build）。"
+        )
+
     rust_keys = extract_rust_keys(wd)
     js_keys = extract_js_keys(wd)
     used = {}
@@ -892,7 +909,9 @@ def cmd_report(args) -> int:
         if not missing and not unused and not mismatches:
             print("目录与代码完全对应。")
 
-    return 1 if mismatches else 0
+    if mismatches or (getattr(args, "strict", False) and (missing or unused)):
+        return 1
+    return 0
 
 
 # ── 生成器 ────────────────────────────────────────────────────────────────
@@ -983,6 +1002,8 @@ def main() -> int:
 
     p = sub.add_parser("report", help="对比代码键与译文目录")
     p.add_argument("--json", action="store_true", help="输出 JSON")
+    p.add_argument("--strict", action="store_true",
+                   help="有缺译或冗余条目时也以非零退出码结束（CI 用）")
     add_workdir(p)
     p.set_defaults(fn=cmd_report)
 

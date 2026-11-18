@@ -1,0 +1,36 @@
+name: 问题反馈
+description: 中文界面错位、截断、点击区域不对、构建失败等
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 期望的表现与实际的表现。界面问题请附截图或终端文本。
+    validations:
+      required: true
+  - type: input
+    id: buildinfo
+    attributes:
+      label: 构建信息
+      description: 二进制旁 `zellij.zh-buildinfo.json` 里的 upstream_tag 和 upstream_commit，或 `zellij --version`。
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: 系统、终端（或浏览器）、终端宽高、`LANG`、是否用自定义快捷键。
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+  - type: checkboxes
+    id: check
+    attributes:
+      label: 确认
+      options:
+        - label: 用 `ZELLIJ_LANG=en` 时问题仍然存在（若不存在，说明是汉化引入的）
+        - label: 我没有在 Issue 中贴出登录令牌或会话数据

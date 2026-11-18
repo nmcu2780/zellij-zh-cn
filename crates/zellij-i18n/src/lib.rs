@@ -162,10 +162,7 @@ mod tests {
     fn tr_ctx_disambiguates_shared_english() {
         assert_eq!(tr_ctx_for(Lang::En, "SESSION (short)", "Se"), "Se");
         assert_eq!(tr_ctx_for(Lang::ZhCn, "SESSION (short)", "Se"), "会");
-        assert_eq!(
-            tr_ctx_for(Lang::ZhCn, "MISSING (short)", "Mi"),
-            "Mi"
-        );
+        assert_eq!(tr_ctx_for(Lang::ZhCn, "MISSING (short)", "Mi"), "Mi");
     }
 
     #[test]

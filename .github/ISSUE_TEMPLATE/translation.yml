@@ -1,0 +1,30 @@
+name: 译文建议
+description: 某处译文不准确、不自然或术语不一致
+labels: ["translation"]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: 界面位置
+      description: 例如“设置 → 鼠标 → 点击”“状态栏第二行”。
+    validations:
+      required: true
+  - type: input
+    id: original
+    attributes:
+      label: 英文原文
+    validations:
+      required: true
+  - type: input
+    id: current
+    attributes:
+      label: 当前译文
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 建议译文与理由
+      description: 状态栏和菜单空间很小，请尽量简短。
+    validations:
+      required: true
