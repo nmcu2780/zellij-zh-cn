@@ -12,7 +12,8 @@
 - 构建时校验上游提交与补丁可应用性，不兼容版本拒绝构建；构建产物旁生成 `zellij.zh-buildinfo.json`。
 - CI 工作流（检查、构建、每周探测上游新版本，只报告不发布）。
 - `tools/tests`：工具单元测试。
-- Arch `PKGBUILD` 草案（未经完整验证）。
+- Arch 包 `packaging/arch/zellij-zh-bin`：把预编译版本打成 pacman 包以替换官方 `zellij`（已在本机 `makepkg` 验证包内容；安装与卸载由使用者执行）。
+- 预编译版本：Linux x86_64/aarch64、macOS Intel/Apple 芯片（见 Releases；Windows 暂不提供）。
 
 ### 修复（完整测试中发现）
 - 约 250 处界面英文字面量漏包 `tr()`（设置向导、主题页、按键/鼠标绑定、会话管理、小技巧、状态栏提示、桌面集成状态、服务端弹窗等），已补译（补丁 0020）。

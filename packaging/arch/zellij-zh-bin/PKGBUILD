@@ -1,0 +1,33 @@
+# Maintainer: nmcu2780
+# 把 zellij-zh-cn 已发布的预编译版本打成 Arch 包，用来替换官方的 zellij 包：
+# 路径仍是 /usr/bin/zellij（systemd 服务、脚本无需改动），补全文件由二进制自己生成。
+# 不需要编译。用法：  cd packaging/arch/zellij-zh-bin && makepkg -si
+# 回滚：              sudo pacman -S zellij   （pacman 会提示冲突并换回官方包）
+pkgname=zellij-zh-bin
+pkgver=0.46.0
+pkgrel=1
+_tag=v0.46.0-zh.1
+pkgdesc="Zellij terminal multiplexer with Simplified Chinese UI (unofficial prebuilt, replaces zellij)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/nmcu2780/zellij-zh-cn"
+license=('MIT')
+provides=("zellij=${pkgver}")
+conflicts=('zellij')
+options=('!strip')   # 发布的二进制已是静态链接并已 strip
+_base="${url}/releases/download/${_tag}"
+source_x86_64=("${_base}/zellij-zh-x86_64-unknown-linux-musl.tar.gz")
+source_aarch64=("${_base}/zellij-zh-aarch64-unknown-linux-musl.tar.gz")
+sha256sums_x86_64=('acdc9816393ebcd9b64675bc451caeb2dbeac34f468e64e2e86524cf27b5e8f1')
+sha256sums_aarch64=('3cda91a2f97a0e70760f5d947ff4e7286b9585daf127332044d5f9468bc55dc6')
+
+package() {
+    cd "$srcdir"
+    install -Dm755 zellij "$pkgdir/usr/bin/zellij"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 zellij.zh-buildinfo.json "$pkgdir/usr/share/doc/$pkgname/zellij.zh-buildinfo.json"
+    # 与官方包一样提供 shell 补全（由二进制生成）
+    install -d "$pkgdir/usr/share/bash-completion/completions" "$pkgdir/usr/share/zsh/site-functions" "$pkgdir/usr/share/fish/vendor_completions.d"
+    ./zellij setup --generate-completion bash > "$pkgdir/usr/share/bash-completion/completions/zellij"
+    ./zellij setup --generate-completion zsh  > "$pkgdir/usr/share/zsh/site-functions/_zellij"
+    ./zellij setup --generate-completion fish > "$pkgdir/usr/share/fish/vendor_completions.d/zellij.fish"
+}

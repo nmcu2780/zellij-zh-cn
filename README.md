@@ -32,6 +32,14 @@ Zellij 更新后，本项目**不会自动变成中文**：需要先适配并验
 
 [Releases](https://github.com/nmcu2780/zellij-zh-cn/releases) 提供 Linux（x86_64、aarch64）和 macOS（Intel、Apple 芯片）的预编译包，解压即用，不需要 Rust 工具链。各平台的验证程度写在发布说明里：目前只有 Linux x86_64 实机测试过，其余平台只验证了能构建。**暂不提供 Windows 版本。**
 
+Arch Linux 用户可以直接把预编译版本装成 pacman 包来**替换官方的 `zellij` 包**（路径仍是 `/usr/bin/zellij`，补全文件齐全，卸载或回滚由 pacman 管理）：
+
+```bash
+cd packaging/arch/zellij-zh-bin && makepkg      # 只下载并打包，不编译
+sudo pacman -U zellij-zh-bin-*.pkg.tar.zst      # 提示与 zellij 冲突时选 y
+# 回滚：sudo pacman -S zellij
+```
+
 ## 构建与使用
 
 需要：rustup（自动安装 1.95.0 与 wasm 目标）、protoc、Python ≥ 3.11、git。完整构建约 6–9 分钟。
@@ -47,8 +55,6 @@ python3 tools/zhcn.py build    # 构建 → .work/zellij/target/release/zellij
 
 - 终端内：按 `ZELLIJ_LANG` → `LC_ALL` → `LC_MESSAGES` → `LANG` 决定，`zh*` 为中文；`ZELLIJ_LANG=en` 切回英文（按会话服务器进程的环境生效，需新开会话）。
 - 网页：`?lang=zh-CN` 或 `?lang=en`，其次浏览器语言。
-
-Arch 用户可参考 [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD)（草案，尚未经完整 `makepkg` 验证），它把结果安装为独立命令 `zellij-zh`，不覆盖系统的 `zellij`。
 
 安装位置、验证与**回滚**步骤见 [安装与回滚](docs/06-install-and-rollback.md)。
 
