@@ -129,9 +129,128 @@ fn trf_for(lang: Lang, en: &'static str, args: &[(&str, &str)]) -> String {
     text
 }
 
+/// Splits one whitespace-delimited word into the pieces a line may break
+/// between: every double-width character (CJK text has no spaces to break at)
+/// is its own piece, runs of narrow characters stay together.
+fn word_pieces<'a>(word: &'a str, width_of: &dyn Fn(&str) -> usize) -> Vec<&'a str> {
+    let mut pieces = vec![];
+    let mut start = 0;
+    for (index, character) in word.char_indices() {
+        let end = index + character.len_utf8();
+        if width_of(&word[index..end]) > 1 {
+            if start < index {
+                pieces.push(&word[start..index]);
+            }
+            pieces.push(&word[index..end]);
+            start = end;
+        }
+    }
+    if start < word.len() {
+        pieces.push(&word[start..]);
+    }
+    pieces
+}
+
+/// Closing punctuation must not start a line.
+fn cannot_start_a_line(piece: &str) -> bool {
+    matches!(
+        piece,
+        "，" | "。" | "、" | "；" | "：" | "！" | "？" | "）" | "”" | "’" | "》" | "」" | "…"
+    )
+}
+
+/// Greedy line wrapping by display width. Works for text with spaces (breaks
+/// between words, like the English text it replaces) and without (breaks
+/// between CJK characters, never before closing punctuation). `width_of`
+/// measures a string in terminal cells; lines are exact substrings of `text`
+/// with runs of whitespace collapsed to one space.
+pub fn wrap_by_width(text: &str, width: usize, width_of: &dyn Fn(&str) -> usize) -> Vec<String> {
+    let mut lines = vec![];
+    let mut current = String::new();
+    let mut current_width = 0;
+    for word in text.split_whitespace() {
+        for (index, piece) in word_pieces(word, width_of).into_iter().enumerate() {
+            let separator = if index == 0 && !current.is_empty() {
+                " "
+            } else {
+                ""
+            };
+            let piece_width = width_of(piece);
+            if current_width + separator.len() + piece_width > width
+                && !current.is_empty()
+                && !cannot_start_a_line(piece)
+            {
+                lines.push(std::mem::take(&mut current));
+                current = piece.to_owned();
+                current_width = piece_width;
+            } else {
+                current.push_str(separator);
+                current.push_str(piece);
+                current_width += separator.len() + piece_width;
+            }
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    // CJK characters count as two cells, everything else as one.
+    fn cells(text: &str) -> usize {
+        text.chars()
+            .map(|c| if c as u32 >= 0x2E80 { 2 } else { 1 })
+            .sum()
+    }
+
+    #[test]
+    fn english_wraps_between_words() {
+        assert_eq!(
+            wrap_by_width("one two three four five six seven", 12, &cells),
+            vec!["one two", "three four", "five six", "seven"]
+        );
+    }
+
+    #[test]
+    fn text_without_spaces_wraps_by_display_width() {
+        let text = "关闭此窗口后，会话保持运行，可从会话列表重新打开。";
+        let lines = wrap_by_width(text, 20, &cells);
+        assert!(lines.len() > 1);
+        for line in &lines {
+            assert!(cells(line) <= 22, "{}", line);
+            assert!(
+                !line.starts_with('，') && !line.starts_with('。'),
+                "{}",
+                line
+            );
+        }
+        assert_eq!(lines.concat(), text);
+    }
+
+    #[test]
+    fn mixed_text_keeps_latin_words_whole() {
+        let text = "按 Ctrl+a 保存全部更改，然后关闭";
+        let lines = wrap_by_width(text, 14, &cells);
+        assert!(lines.iter().any(|line| line.contains("Ctrl+a")));
+        let strip = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+        assert_eq!(strip(&lines.concat()), strip(text));
+    }
+
+    #[test]
+    fn an_overlong_word_stays_whole() {
+        assert_eq!(
+            wrap_by_width("averyveryverylongword x", 8, &cells),
+            vec!["averyveryverylongword", "x"]
+        );
+    }
+
+    #[test]
+    fn empty_text_has_no_lines() {
+        assert!(wrap_by_width("   ", 10, &cells).is_empty());
+    }
 
     #[test]
     fn lang_from_detects_chinese() {

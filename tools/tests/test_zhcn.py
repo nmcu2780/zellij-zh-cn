@@ -118,5 +118,60 @@ class ShippedPatches(unittest.TestCase):
         self.assertRegex(up["commit"], r"^[0-9a-f]{40}$")
 
 
+class Audit(unittest.TestCase):
+    def test_ui_like_text(self):
+        self.assertTrue(zhcn.audit_looks_like_ui_text("Approve and Continue"))
+        self.assertTrue(zhcn.audit_looks_like_ui_text("Dismiss"))
+        self.assertTrue(zhcn.audit_looks_like_ui_text("Search: {}_"))
+
+    def test_not_ui_text(self):
+        for text in ["session_panel_size", "zellij-app-quit", "<Ctrl c>", "Alt + i",
+                     "/usr/bin/zellij", "https://zellij.dev", "x", "ok", "default.kdl"]:
+            self.assertFalse(zhcn.audit_looks_like_ui_text(text), text)
+
+    def scan(self, source: str, entries=None, allow=None, sites=False):
+        d = Path(tempfile.mkdtemp())
+        f = d / "default-plugins" / "demo" / "src" / "main.rs"
+        f.parent.mkdir(parents=True)
+        f.write_text(source, encoding="utf-8")
+        return [t for _, t in zhcn.audit_scan_file(d, f, entries or {}, allow or set(), sites)]
+
+    def test_wrapped_literals_are_not_reported(self):
+        self.assertEqual(self.scan('fn f(){ tr("Save changes"); trf("Hello {a0}", &[]); }'), [])
+
+    def test_bare_literal_is_reported(self):
+        self.assertEqual(self.scan('fn f(){ let t = "Save changes"; }'), ["Save changes"])
+
+    def test_logs_and_asserts_are_not_reported(self):
+        self.assertEqual(self.scan('fn f(){ eprintln!("Something bad happened"); assert!(x, "Must hold true"); }'), [])
+
+    def test_match_patterns_and_comparisons_are_not_reported(self):
+        self.assertEqual(self.scan('fn f(){ match a { "Save changes" => 1, _ => 2 }; if b == "Save changes" {} }'), [])
+
+    def test_test_module_is_skipped(self):
+        self.assertEqual(self.scan('fn f(){}\n#[cfg(test)]\nmod tests { fn t(){ let t = "Only in tests"; } }'), [])
+
+    def test_catalog_hit_is_skipped_unless_sites_mode(self):
+        entries = {"Save changes": "保存更改"}
+        self.assertEqual(self.scan('fn f(){ let t = "Save changes"; }', entries), [])
+        self.assertEqual(self.scan('fn f(){ let t = "Save changes"; }', entries, sites=True), ["Save changes"])
+
+    def test_allowlist_literal_and_regex(self):
+        self.assertEqual(self.scan('fn f(){ let t = "Save changes"; }', allow={"Save changes"}), [])
+        self.assertEqual(self.scan('fn f(){ let t = "failed to open it"; }', allow={"re: ^failed"}), [])
+
+
+class EmphasisChecker(unittest.TestCase):
+    def test_shipped_translations_keep_highlighted_words(self):
+        spec = importlib.util.spec_from_file_location("check_emphasis", TOOLS / "check_emphasis.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        wd = REPO / ".work" / "zellij"
+        if not (wd / "zellij-i18n").is_dir():
+            self.skipTest("需要已应用补丁的 .work/zellij（先运行 tools/zhcn.py apply）")
+        sys.argv = ["check_emphasis.py", "--workdir", str(wd)]
+        self.assertEqual(mod.main(), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

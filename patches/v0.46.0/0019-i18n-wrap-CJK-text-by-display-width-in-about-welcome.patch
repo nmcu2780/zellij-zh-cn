@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: zellij-zh-cn build <build@localhost>
 Date: Tue, 17 Nov 2026 21:58:48 +0800
-Subject: [PATCH 19/19] i18n: wrap CJK text by display width in about welcome
+Subject: [PATCH 19/20] i18n: wrap CJK text by display width in about welcome
  window
 
 ---

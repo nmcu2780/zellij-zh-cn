@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: zhcn <zhcn@local>
 Date: Mon, 16 Nov 2026 15:29:58 +0800
-Subject: [PATCH 05/19] i18n: translate bars status-bar hints and session hints
+Subject: [PATCH 05/20] i18n: translate bars status-bar hints and session hints
 
 ---
  .../bars/src/status_bar/one_line_ui.rs        | 140 +++++++++---------

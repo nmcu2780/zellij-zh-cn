@@ -914,6 +914,153 @@ def cmd_report(args) -> int:
     return 0
 
 
+# ── 漏译审计 ──────────────────────────────────────────────────────────────
+
+AUDIT_ALLOW_PATH = REPO_ROOT / "i18n" / "audit-allow.txt"
+# 字符串、行注释、字符字面量（先匹配注释，避免注释中的引号被当成字符串）
+AUDIT_TOKEN_RE = re.compile(r'//[^\n]*|"((?:[^"\\]|\\.)*)"|\'(?:\\.|[^\'\\])\'', re.S)
+# 字面量之前的上下文中出现这些调用/宏，说明它是已翻译、日志或断言，不属于界面文案
+AUDIT_CONTEXT_SKIP_RE = re.compile(
+    r"(?:\btr|\btrf|\btr_ctx|\btr_dyn|eprintln!|println!|print!|panic!|assert\w*!|debug_assert\w*!|"
+    r"\bwrite!|\bwriteln!|log::\w+!|\b(?:debug|info|warn|error|trace)!|\.expect|unreachable!|todo!|"
+    r"include_str!|env!|concat!|\.context|\.with_context|\bBail|\banyhow!|\bbail!)\s*\(\s*$"
+)
+# 同一条语句里出现这些宏时，其任一参数里的字面量都不是界面文案（如 assert!(cond, "消息")）
+AUDIT_STATEMENT_SKIP_RE = re.compile(
+    r"(?:eprintln!|println!|print!|panic!|assert\w*!|debug_assert\w*!|unreachable!|todo!|"
+    r"log::\w+!|\b(?:debug|info|warn|error|trace)!|\banyhow!|\bbail!)\s*\("
+)
+
+
+def audit_load_allow() -> set:
+    """读取白名单：每行一个字面量原文；`file: <路径前缀>` 表示整个文件/目录不审计；`#` 开头为注释。"""
+    allow = set()
+    if AUDIT_ALLOW_PATH.is_file():
+        for line in AUDIT_ALLOW_PATH.read_text(encoding="utf-8").splitlines():
+            line = line.rstrip("\n")
+            if line and not line.lstrip().startswith("#"):
+                allow.add(line)
+    return allow
+
+
+def audit_literal_allowed(literal: str, allow: set) -> bool:
+    if literal in allow:
+        return True
+    return any(a.startswith("re: ") and re.search(a[4:].strip(), literal) for a in allow)
+
+
+def audit_file_allowed(rel: str, allow: set) -> bool:
+    return any(a.startswith("file: ") and rel.startswith(a[6:].strip()) for a in allow)
+
+
+def audit_looks_like_ui_text(text: str) -> bool:
+    """像面向用户的英文文案：含空格的多词短语，或首字母大写的单个英文单词。"""
+    if not re.search(r"[A-Za-z]{3}", text):
+        return False
+    # 纯按键标记（<Ctrl c>、Alt + i、Ctrl g + p）不是可翻译文案
+    key_words = r"(?:Ctrl|Alt|Shift|Super|Enter|Esc|Tab|Space|Left|Right|Up|Down|Del|Home|End|ENTER|ESC|TAB|[A-Za-z0-9]|[↑↓←→+/,-])"
+    if re.fullmatch(rf"(?:<\s*{key_words}(?:\s*[+ ]\s*{key_words})*\s*>|{key_words}(?:\s*[+ ]\s*{key_words})*)(?:\s*[,+]\s*(?:<[^>]*>|{key_words}))*", text.strip()):
+        return False
+    # 路径、标识符、URL 等不是文案；多词短语里的下划线（如 "Search: {}_" 的光标）不算标识符
+    if re.search(r"[\\/=@#$%^&*|~`]|::|\b(?:https?|wss?|file)\b|\.rs\b|\.kdl\b|\.wasm\b", text):
+        return False
+    if "_" in text and " " not in text.strip():
+        return False
+    stripped = text.strip()
+    words = re.findall(r"[A-Za-z][A-Za-z'’-]*", stripped)
+    if " " in stripped and len(words) >= 2 and any(len(w) >= 3 for w in words):
+        return True
+    # 单个首字母大写的单词（"Dismiss"），或“单词:”开头的标签（"Search: {}_"）
+    return bool(re.fullmatch(r"[A-Z][a-z]{2,}", stripped) or re.match(r"[A-Z][a-z]{2,}:", stripped))
+
+
+def audit_scan_file(wd: Path, path: Path, entries: dict, allow: set, sites: bool = False) -> list:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return []
+    marker = re.search(r"#\[cfg\(test\)\]\s*\n\s*(?:pub\s*(?:\(crate\)\s*)?)?mod\s+\w+", text)
+    if marker:
+        text = text[: marker.start()]
+    found = []
+    for m in AUDIT_TOKEN_RE.finditer(text):
+        raw = m.group(1)
+        if raw is None:
+            continue
+        literal = unescape_rust(raw)
+        if audit_literal_allowed(literal, allow):
+            continue
+        # 默认只报“目录里也没有”的字面量；sites=True 时连目录里已有、
+        # 但此处没包 tr() 的使用点也报（译文存在却不会生效）
+        if not sites and (literal in entries or raw in entries):
+            continue
+        if not audit_looks_like_ui_text(literal):
+            continue
+        if AUDIT_CONTEXT_SKIP_RE.search(text[max(0, m.start() - 80): m.start()]):
+            continue
+        statement_start = max(text.rfind(";", 0, m.start()), text.rfind("{", 0, m.start()),
+                              text.rfind("}", 0, m.start()), m.start() - 400)
+        if AUDIT_STATEMENT_SKIP_RE.search(text[statement_start + 1: m.start()]):
+            continue
+        # match 分支的模式（"x" => ...、"x" | "y" =>）与相等比较（== "x"）只是标识，不显示
+        if re.match(r"\s*(?:=>|\|\s*\")", text[m.end(): m.end() + 12]) \
+                or re.search(r"(?:==|!=)\s*$", text[max(0, m.start() - 6): m.start()]):
+            continue
+        line_start = text.rfind("\n", 0, m.start()) + 1
+        if re.match(r"\s*#\[", text[line_start: text.find("\n", m.start())]):
+            continue
+        lineno = text.count("\n", 0, m.start()) + 1
+        found.append((f"{path.relative_to(wd)}:{lineno}", literal))
+    return found
+
+
+def collect_audit(wd: Path, entries: dict, allow: set, sites: bool = False) -> list:
+    """返回 [(位置, 字面量)]：不在 tr()/日志/断言中、像界面文案、且既无译文也未列入白名单。
+
+    范围：全部默认插件 + server 的 ui/ + 补丁触及过的 Rust 文件（协议、解析器、
+    测试等内部代码里的英文不是界面文案，不审计）。"""
+    candidates = set()
+    for root in [wd / "default-plugins", wd / "zellij-server" / "src" / "ui"]:
+        if root.is_dir():
+            candidates.update(root.rglob("*.rs"))
+    for f in files_touched_by_patches(patches_dir(load_upstream())):
+        if f.endswith(".rs") and (wd / f).is_file():
+            candidates.add(wd / f)
+    found = []
+    for path in sorted(candidates):
+        parts = set(path.parts)
+        if parts & {"tests", "test", "unit"} or "fixture" in str(path) \
+                or path.name.endswith(("_tests.rs", "_test.rs", "tests.rs")):
+            continue
+        if audit_file_allowed(str(path.relative_to(wd)), allow):
+            continue
+        found.extend(audit_scan_file(wd, path, entries, allow, sites))
+    return found
+
+
+def cmd_audit(args) -> int:
+    """漏译审计：列出可能漏掉 tr() 的英文界面字面量（启发式；有意不译的写入 i18n/audit-allow.txt）。"""
+    wd = workdir(args)
+    if not (wd / "zellij-i18n").is_dir():
+        raise SystemExit(f"工作区 {wd} 尚未应用补丁，请先运行 tools/zhcn.py apply（或 build）。")
+    entries, errors = load_catalog()
+    if entries is None:
+        raise SystemExit("译文目录无法解析：" + "；".join(errors))
+    found = collect_audit(wd, entries, audit_load_allow(), getattr(args, "sites", False))
+    if args.json:
+        print(json.dumps([{"location": loc, "text": t} for loc, t in found], ensure_ascii=False, indent=2))
+    else:
+        by_file = {}
+        for loc, t in found:
+            by_file.setdefault(loc.rsplit(":", 1)[0], []).append((loc, t))
+        for f in sorted(by_file):
+            print(f"\n{f}（{len(by_file[f])}）")
+            for loc, t in by_file[f]:
+                print(f"  {loc.rsplit(':', 1)[1]:>5}  {t!r}")
+        print(f"\n共 {len(found)} 处疑似漏译（启发式；确属有意不译的请写入 i18n/audit-allow.txt）。")
+    return 1 if (found and args.strict) else 0
+
+
 # ── 生成器 ────────────────────────────────────────────────────────────────
 
 
@@ -1006,6 +1153,14 @@ def main() -> int:
                    help="有缺译或冗余条目时也以非零退出码结束（CI 用）")
     add_workdir(p)
     p.set_defaults(fn=cmd_report)
+
+    p = sub.add_parser("audit", help="漏译审计：列出疑似未包 tr() 的英文界面字面量")
+    p.add_argument("--json", action="store_true", help="输出 JSON")
+    p.add_argument("--strict", action="store_true", help="有疑似漏译时以非零退出码结束")
+    p.add_argument("--sites", action="store_true",
+                   help="连译文目录里已有、但此处没包 tr() 的使用点也列出（更严格，含少量误报）")
+    add_workdir(p)
+    p.set_defaults(fn=cmd_audit)
 
     p = sub.add_parser("gen-rust", help="生成 Rust 译文目录")
     p.add_argument("--out", required=True, help="输出路径")

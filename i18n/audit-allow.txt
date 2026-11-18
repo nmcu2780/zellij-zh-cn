@@ -1,0 +1,88 @@
+# 漏译审计白名单（tools/zhcn.py audit）
+# 每行一个“有意不译”的字面量原文；`file: <路径前缀>` 表示整个文件/目录不审计。
+# 加入白名单前请确认确实不该翻译，并在这里写明理由。
+
+# 动作名：写入配置文件，必须保持英文原样
+file: default-plugins/configuration/src/action_picker.rs
+# 内部错误/日志与解析错误信息：不是界面文案
+file: zellij-server/src/pty.rs
+file: zellij-utils/src/data.rs
+# 构建脚本，不属于运行时界面
+file: xtask/
+
+# 专有名词、命令与文件内容
+Microsoft
+Scoop
+Chocolatey
+Nix
+Homebrew
+cargo install
+zellij terminal
+zellij terminal --inbox
+zellij terminal --sessions
+[Desktop Entry]
+
+# ── 以下为有意不译 / 暂未覆盖，均需写明理由 ──
+
+# 插件窗格名：是可被用户引用的标识（pane 名称），不是界面文案
+Welcome
+Zellij launcher
+Release Notes {}
+Session Manager
+Quit
+# 命令行、配置项与示例：必须保持原样
+re: ^zellij( |$)
+re: ^(show_startup_tips|stacked_resize) false$
+# 产品名
+ Zellij 
+# 按键组合与按键示例
+Ctrl g + {} + {}
+Ctrl Shift v, Shift Insert
+# 内部错误/日志/调试信息，面向开发者而不是界面
+re: ^(failed|Failed|Unknown event|failed to)\b
+re: \bmust have\b
+re: could not be (read|written)
+This prompt is already answering another request
+this prompt is already answering another request
+default: must be a JSON object for form
+re: is not a whole number$
+No user is attached to this session to answer the prompt
+The user this prompt is for is not attached
+re: ^zellij prompt:
+Failed to deserialize KDL node. \nPossible reasons:\n{}\n{}\n{}\n{}
+re: ^- Missing quotations
+# 配置中会被比较、保存的哨兵常量与枚举值（翻译会破坏与配置文件的对应）
+(not set)
+(bundled font)
+(same as Font)
+# 经 `match` 取得译文的动词键（"Add"/"New" → form_title 键）
+Add
+# 按键提示里的 `<any key>` 在 key_hints 中翻译
+<any key>
+# 协议值：服务端传来的远程客户端描述，仅用于比较
+through the web
+# 变量名规则说明（面向开发者的配置语法）
+A variable name starts with a letter or '_' and uses letters, digits and '_'
+# 取自配置文件的原始写入内容
+Wrote 
+Removed 
+# 保存在配置里的 KDL 片段模板
+re: ^\n\s+keybinds
+# 日期时间简写 "{}m ago" 等：随 layout-manager 一并列为未覆盖
+re: ^\{\}[mhd] ago$
+# layout-manager 插件：紧凑的手工对齐控制行（含 [All Tabs] 之类用于子串着色/匹配的标记），
+# 翻译需要重新设计布局，暂不覆盖，见 docs/coverage.md
+file: default-plugins/layout-manager/
+# Debug 输出（Debug trait 的变体名）
+Run
+# 经 `tr(CLOSE_REMEMBER_LABEL)` 在使用处翻译（常量，报告无法自动发现该键）
+Always do this
+# help.rs 按这个前缀识别配置注释里的“默认值”行（解析标记，不是显示文案）
+Default:
+# 容器/桌面环境/发行版专有名词
+Distrobox
+Toolbox
+Flatpak
+Podman
+Docker
+Konsole

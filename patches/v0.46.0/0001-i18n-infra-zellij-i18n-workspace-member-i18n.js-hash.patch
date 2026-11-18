@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: zhcn <zhcn@local>
 Date: Mon, 16 Nov 2026 14:44:04 +0800
-Subject: [PATCH 01/19] i18n infra: zellij-i18n workspace member, i18n.js
+Subject: [PATCH 01/20] i18n infra: zellij-i18n workspace member, i18n.js
  hashed asset
 
 ---

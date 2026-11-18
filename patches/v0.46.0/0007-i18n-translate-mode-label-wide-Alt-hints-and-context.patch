@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: zhcn <zhcn@local>
 Date: Tue, 17 Nov 2026 13:13:15 +0800
-Subject: [PATCH 07/19] i18n: translate mode label, wide Alt hints and
+Subject: [PATCH 07/20] i18n: translate mode label, wide Alt hints and
  context-menu labels
 
 ---

@@ -57,6 +57,10 @@ jobs:
         run: $PYTHON tools/zhcn.py build
       - name: report (key/catalog parity, needs the patched tree)
         run: $PYTHON tools/zhcn.py report --strict
+      - name: audit (untranslated UI string literals)
+        run: $PYTHON tools/zhcn.py audit --strict
+      - name: emphasis (translations still contain highlighted words)
+        run: $PYTHON tools/check_emphasis.py
       - uses: actions/upload-artifact@v4
         with:
           name: zellij-zh-bin

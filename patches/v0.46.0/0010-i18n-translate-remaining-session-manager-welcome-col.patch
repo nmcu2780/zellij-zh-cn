@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
 Date: Tue, 17 Nov 2026 13:53:40 +0800
-Subject: [PATCH 10/19] i18n: translate remaining session-manager welcome,
+Subject: [PATCH 10/20] i18n: translate remaining session-manager welcome,
  column and hint strings
 
 ---

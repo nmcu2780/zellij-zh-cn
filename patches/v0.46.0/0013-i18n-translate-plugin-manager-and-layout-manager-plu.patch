@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: nmcu2780 <203441210+nmcu2780@users.noreply.github.com>
 Date: Tue, 17 Nov 2026 14:28:35 +0800
-Subject: [PATCH 13/19] i18n: translate plugin-manager and layout-manager
+Subject: [PATCH 13/20] i18n: translate plugin-manager and layout-manager
  plugins
 
 ---

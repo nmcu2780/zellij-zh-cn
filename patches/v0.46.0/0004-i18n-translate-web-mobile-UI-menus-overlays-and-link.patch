@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: zhcn <zhcn@local>
 Date: Mon, 16 Nov 2026 15:29:23 +0800
-Subject: [PATCH 04/19] i18n: translate web mobile UI menus, overlays and link
+Subject: [PATCH 04/20] i18n: translate web mobile UI menus, overlays and link
  popup
 
 ---

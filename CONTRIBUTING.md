@@ -23,6 +23,8 @@
    ```bash
    python3 tools/zhcn.py fetch && python3 tools/zhcn.py apply   # 首次
    python3 tools/zhcn.py report --strict                        # 键与目录必须完全对应
+   python3 tools/zhcn.py audit --strict                         # 没有漏包 tr() 的界面字符串
+   python3 tools/check_emphasis.py                              # 被高亮的词仍在译文里
    python3 -m unittest discover -s tools/tests                  # 工具测试
    ```
 
@@ -36,6 +38,12 @@
 2. 在 `.work/zellij` 里改代码并提交（只提交源码，不要提交构建产物，如 `*.wasm`、`assets/` 下的生成文件）。
 3. 回到本仓库根目录：`python3 tools/zhcn.py export-patches`，再 `python3 tools/zhcn.py check`。
 4. 重新构建并实测：`python3 tools/zhcn.py build`（约 7 分钟）。
+
+新增或修改界面文案时：
+
+- 英文字面量必须包进 `tr()` / `trf()`（带参数用 `{a0}`、`{a1}`），不要用 `format!` 拼接英文句子；
+- **不要用写死的字符位置给文字上色**（`color_range(1, 6..=10)` 这类写法换成中文就会错位），改用 `color_substring`、`color_keys`（给所有 `<...>` 按键标记上色）或 `combo_text`；
+- 有意不译的字符串写入 [`i18n/audit-allow.txt`](i18n/audit-allow.txt) 并注明理由。
 
 原则（详见 [架构文档](docs/02-architecture.md)）：
 

@@ -7,7 +7,7 @@
 ## 验证环境
 
 - 本机：Arch Linux，zellij 0.46.0-1（pacman）；测试用独立构建
-  `.work/zellij/target/release/zellij`（上游 v0.46.0 + 19 补丁）。
+  `.work/zellij/target/release/zellij`（上游 v0.46.0 + 20 补丁）。
 - 工具链：rustup 1.95.0 + wasm32-wasip1 + x86_64-unknown-linux-musl；protoc 36.1。
 - 无头浏览器：Helium + playwright-core（仅 localhost 页面）。
 
@@ -15,8 +15,8 @@
 
 | 检查 | 命令 | 结果 |
 | --- | --- | --- |
-| 基线+补丁+目录 | `tools/zhcn.py check` | 通过，19 补丁全部干净应用 |
-| 键/目录对应 | `tools/zhcn.py report` | 1764 用键 = 1764 条目，0 缺失/0 冗余/0 占位符错误 |
+| 基线+补丁+目录 | `tools/zhcn.py check` | 通过，20 补丁全部干净应用 |
+| 键/目录对应 | `tools/zhcn.py report` | 2067 用键 = 2067 条目，0 缺失/0 冗余/0 占位符错误 |
 | i18n 库单测 | `cargo test --manifest-path crates/zellij-i18n/Cargo.toml` | 6/6 |
 | 上游插件测试 | `env -u ZELLIJ_LANG LC_ALL=C cargo test -p bars -p session-manager -p configuration -p context-menu -p share -p prompt -p multiple-select -p strider -p plugin-manager -p layout-manager -p about` | 全通过（bars 177、session-manager 182、configuration 174 等；configuration 的 KDL 回写 round-trip 测试证明译文不进入配置） |
 | 网页完整性测试 | `cargo test -p zellij-client web_client`（integrity 相关） | 通过 |

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: zhcn <zhcn@local>
 Date: Mon, 16 Nov 2026 15:29:58 +0800
-Subject: [PATCH 06/19] i18n: translate compact bar, tab bar, session indicator
+Subject: [PATCH 06/20] i18n: translate compact bar, tab bar, session indicator
  and link plugin
 
 ---

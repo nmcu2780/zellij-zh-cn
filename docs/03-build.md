@@ -50,6 +50,12 @@ python3 tools/zhcn.py report           # 加 --json 输出机器可读结果
 #    占位符不匹配返回非零；缺译仅为警告；加 --strict 时缺译/冗余条目也返回非零（CI 使用）
 #    注意：report 需要已应用补丁的工作区（先 apply 或 build），否则会拒绝
 
+# 4b. 漏译审计：列出没有包 tr() 的英文界面字面量（启发式）；--sites 更严格，
+#     --strict 在有疑似漏译时返回非零。有意不译的写入 i18n/audit-allow.txt
+python3 tools/zhcn.py audit
+#     高亮检查：按内容高亮的译文必须仍包含被高亮的词/按键
+python3 tools/check_emphasis.py
+
 # 5. 补丁开发流程：在 .work/zellij 的 zh-cn 分支上修改/提交，然后重新导出
 python3 tools/zhcn.py export-patches   # git format-patch <基线>..zh-cn
 
