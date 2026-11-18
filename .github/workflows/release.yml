@@ -74,12 +74,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.95.0
         with:
           targets: wasm32-wasip1,${{ matrix.target }}
+      - name: work directory (short path on Windows; upstream has very long file names)
+        run: |
+          git config --global core.longpaths true
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            echo "ZWD=${RUNNER_TEMP}/z" >> "$GITHUB_ENV"
+          else
+            echo "ZWD=${GITHUB_WORKSPACE}/.work/zellij" >> "$GITHUB_ENV"
+          fi
       - name: fetch upstream baseline
-        run: python tools/zhcn.py fetch
+        run: python tools/zhcn.py fetch --workdir "$ZWD"
       - name: build localized binary
-        run: python tools/zhcn.py build --target ${{ matrix.target }}
+        run: python tools/zhcn.py build --target ${{ matrix.target }} --workdir "$ZWD"
       - name: package
-        run: python tools/zhcn.py package --target ${{ matrix.target }} --out dist
+        run: python tools/zhcn.py package --target ${{ matrix.target }} --workdir "$ZWD" --out dist
       - uses: actions/upload-artifact@v4
         with:
           name: zellij-zh-${{ matrix.target }}

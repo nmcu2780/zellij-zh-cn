@@ -113,6 +113,14 @@ class ShippedPatches(unittest.TestCase):
             self.assertNotIn("GIT binary patch", p.read_text(encoding="utf-8"), p.name)
             self.assertLess(p.stat().st_size, 1_000_000, p.name)
 
+    def test_i18n_crate_has_no_build_script_and_a_placeholder_catalog(self):
+        # a build script is compiled on the host but re-run inside upstream's `cross`
+        # containers, whose older glibc cannot run it (broke the musl release builds)
+        crate = REPO / "crates" / "zellij-i18n"
+        self.assertFalse((crate / "build.rs").exists())
+        self.assertTrue((crate / "src" / "catalog_generated.rs").is_file())
+        self.assertNotIn("build", (crate / "Cargo.toml").read_text(encoding="utf-8").replace("description", ""))
+
     def test_upstream_baseline_is_pinned_to_a_full_commit(self):
         up = zhcn.load_upstream()
         self.assertRegex(up["commit"], r"^[0-9a-f]{40}$")

@@ -68,7 +68,7 @@ python3 tools/zhcn.py gen-web  --out <路径>
 
 ```bash
 # 本仓库的查找库（零依赖）。测试用内置测试表，不需要先生成目录；
-# 缺少生成文件时 build.rs 会用空表编译（全部回退英文），正式构建时
+# 仓库里提交的 catalog_generated.rs 是空占位表（全部回退英文），正式构建时
 # apply/build 会自动调用 gen-rust 生成真实目录
 cargo test --manifest-path crates/zellij-i18n/Cargo.toml
 
