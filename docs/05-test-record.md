@@ -127,3 +127,18 @@
 - 网页端测试用的是 16:26 的构建；之后只改了 session-manager/strider 的插件高亮代码，网页资源未变，未重跑网页测试。
 - 审计是启发式的，不能证明没有漏译；最终仍靠实际界面抽查。
 
+## 发布前核对
+
+最终提交（`908c973`，其后只改了术语“桌面入口”与文档）的**干净克隆**（无全局 git 身份、全新 `.work`）：
+
+| 步骤 | 结果 |
+| --- | --- |
+| `python3 -m unittest discover -s tools/tests` | 通过（修补前的克隆里依赖补丁树的 1 项自动跳过） |
+| `tools/zhcn.py fetch` / `check` | 通过，20 个补丁可干净应用 |
+| `tools/zhcn.py build` | 成功，484 秒；产物旁生成 `zellij.zh-buildinfo.json` |
+| `tools/zhcn.py report --strict` | 通过（键与目录一一对应） |
+| `tools/zhcn.py audit --strict` | 0 处疑似漏译 |
+| `tools/check_emphasis.py` | 55 处高亮，0 问题 |
+| 补丁树就绪后再跑工具测试 | 27 个全部通过（含高亮检查） |
+
+CI 配置尚未在 GitHub 上实际运行过（见 `docs/04-upstream-maintenance.md`）。
