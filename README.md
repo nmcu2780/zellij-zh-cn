@@ -28,6 +28,10 @@
 
 Zellij 更新后，本项目**不会自动变成中文**：需要先适配并验证新版本。可用 `python3 tools/zhcn.py upstream-status` 查看上游新版本、`probe --tag <版本>` 试探兼容性。详见 [上游维护文档](docs/04-upstream-maintenance.md)。
 
+## 下载预编译版本
+
+[Releases](https://github.com/nmcu2780/zellij-zh-cn/releases) 提供 Linux（x86_64、aarch64）和 macOS（Intel、Apple 芯片）的预编译包，解压即用，不需要 Rust 工具链。各平台的验证程度写在发布说明里：目前只有 Linux x86_64 实机测试过，其余平台只验证了能构建。**暂不提供 Windows 版本。**
+
 ## 构建与使用
 
 需要：rustup（自动安装 1.95.0 与 wasm 目标）、protoc、Python ≥ 3.11、git。完整构建约 6–9 分钟。

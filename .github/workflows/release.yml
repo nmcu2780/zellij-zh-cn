@@ -53,8 +53,8 @@ jobs:
             os: macos-latest
           - target: aarch64-apple-darwin
             os: macos-latest
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
+          # Windows 暂不提供：构建在 OpenSSL 等依赖处反复失败且无法在本地验证，计划以后再处理。
+          # （tools/zhcn.py 的 --target 仍保留 Windows 分支，未经验证。）
     defaults:
       run:
         shell: bash
