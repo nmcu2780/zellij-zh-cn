@@ -5,7 +5,7 @@
 # resize 调整大小 / move 移动 / search 搜索 / scroll 滚动
 # scrollback 回滚缓冲区 / detach 断开 / quit 退出 / rename 重命名
 # split 拆分 / layout 布局 / plugin 插件 / settings 设置
-# clipboard 剪贴板 / inbox 收件箱 / sync 同步 / break pane 拆出窗格
+# desktop entry 桌面入口 / clipboard 剪贴板 / inbox 收件箱 / sync 同步 / break pane 拆出窗格
 # case sensitive 区分大小写 / whole word 整词 / wrap 循环 / select 选择
 # 风格：简洁 UI 中文；短标签不加句号；省略号用 "……"；键名/修饰键
 # （Ctrl、Alt、Shift、ESC、TAB、方向键）与 "Zellij"、"TMUX" 不译。
@@ -959,7 +959,7 @@
 "Deleted {a0} and its file {a1}" = "已删除 {a0} 及其文件 {a1}"
 "Deleted {a0} from {a1}" = "已从{a1}删除 {a0}"
 "Deleted {a0} {a1}" = "已删除 {a0} 个{a1}"
-"Desktop Entry" = "桌面项"
+"Desktop Entry" = "桌面入口"
 "Desktop setup is not available: {a0}" = "桌面集成不可用：{a0}"
 "Detach or quit when the terminal closes" = "终端关闭时断开或退出"
 "Disable session metadata" = "禁用会话元数据"
@@ -1025,7 +1025,7 @@
 "Inbox card at startup" = "启动时的收件箱卡片"
 "Initial columns" = "初始列数"
 "Initial rows" = "初始行数"
-"Install Desktop Entry" = "安装桌面项"
+"Install Desktop Entry" = "安装桌面入口"
 "Install {a0}" = "安装 {a0}"
 "Italic font" = "斜体"
 "Items of the right-click menus" = "右键菜单项"
@@ -1184,7 +1184,7 @@
 "Text color; not set uses the theme" = "文本颜色；不设置则使用主题色"
 "The Start menu entry" = "该开始菜单项"
 "The config file" = "配置文件"
-"The desktop entry" = "该桌面项"
+"The desktop entry" = "该桌面入口"
 "The {a0} key cannot be empty" = "{a0} 键不能为空"
 "Theme" = "主题"
 "Theme (dark terminal)" = "主题（深色终端）"
@@ -1245,7 +1245,7 @@
 "right-click menu context menu items" = "右键菜单 上下文菜单 项"
 "some modes" = "部分模式"
 "the Start menu entry" = "该开始菜单项"
-"the desktop entry" = "该桌面项"
+"the desktop entry" = "该桌面入口"
 "theme folder" = "主题文件夹"
 "themes colors palette edit theme" = "主题 颜色 调色板 编辑主题"
 "x" = "x"
