@@ -86,7 +86,15 @@ jobs:
       - name: fetch upstream baseline
         run: python tools/zhcn.py fetch --workdir "$ZWD"
       - name: build localized binary
-        run: python tools/zhcn.py build --target ${{ matrix.target }} --workdir "$ZWD"
+        run: |
+          # Windows: OpenSSL is built from source and needs a full perl. Git Bash's bundled
+          # perl lacks modules; the runner's Strawberry Perl (what upstream's PowerShell
+          # steps use) works.
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            export PATH="/c/Strawberry/perl/bin:/c/Strawberry/c/bin:$PATH"
+            perl -v | head -2
+          fi
+          python tools/zhcn.py build --target ${{ matrix.target }} --workdir "$ZWD"
       - name: package
         run: python tools/zhcn.py package --target ${{ matrix.target }} --workdir "$ZWD" --out dist
       - uses: actions/upload-artifact@v4
