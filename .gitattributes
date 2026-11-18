@@ -1,0 +1,3 @@
+# 补丁与译文必须保持 LF：在 Windows 上被转成 CRLF 会让 git am 的上下文对不上
+* text=auto eol=lf
+*.patch -text
