@@ -3,15 +3,18 @@ name: release
 # 为各平台构建汉化版并打包。沿用上游发布流程的目标与构建方式
 # （Linux musl 与 macOS 用 `cargo xtask ci cross`，Windows 原生构建并静态链接 CRT）。
 #
-# - 手动运行（workflow_dispatch）：只构建并上传为工作流产物，用于试跑，不创建 Release。
-# - 推送形如 v0.46.0-zh.1 的 tag：构建后创建**草稿** Release，由人工核对说明后再发布。
+# - 手动运行（workflow_dispatch）：构建并上传为工作流产物，用于试跑。
+# - 填写 tag 输入（如 v0.46.0-zh.2）时，构建完成后创建**草稿** Release，由人工核对说明后再发布。
+#   不再在推送 tag 时自动触发：这样补发/改说明时不会白白重编一遍。
 # 各平台的验证程度不同，请在发布说明里如实写明。
 
 on:
-  push:
-    tags:
-      - "v*-zh.*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "要创建草稿 Release 的 tag（留空则只构建、不发布）"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -105,7 +108,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: inputs.tag != ''
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -122,7 +125,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
+          gh release create "${{ inputs.tag }}" dist/* \
+            --target "$GITHUB_SHA" \
             --draft \
-            --title "Zellij 简体中文 $GITHUB_REF_NAME" \
+            --title "Zellij 简体中文 ${{ inputs.tag }}" \
             --notes-file .github/release-notes.md
