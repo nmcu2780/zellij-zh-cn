@@ -173,5 +173,54 @@ class EmphasisChecker(unittest.TestCase):
         self.assertEqual(mod.main(), 0)
 
 
+class Packaging(unittest.TestCase):
+    def fake_build(self, windows: bool) -> Path:
+        d = Path(tempfile.mkdtemp())
+        names = ["zellij.exe", "zellij-terminal.exe"] if windows else ["zellij"]
+        for n in names:
+            (d / n).write_bytes(b"binary")
+        (d / (names[0] + ".zh-buildinfo.json")).write_text("{}", encoding="utf-8")
+        return d
+
+    def run_package(self, target: str, windows: bool):
+        import argparse
+        src = self.fake_build(windows)
+        out = Path(tempfile.mkdtemp())
+        args = argparse.Namespace(target=target, out=str(out), source=str(src), workdir=None)
+        self.assertEqual(zhcn.cmd_package(args), 0)
+        return out
+
+    def test_unix_archive_and_checksum(self):
+        import hashlib, tarfile
+        out = self.run_package("x86_64-unknown-linux-musl", False)
+        archive = out / "zellij-zh-x86_64-unknown-linux-musl.tar.gz"
+        with tarfile.open(archive) as t:
+            names = sorted(t.getnames())
+        self.assertEqual(names, ["LICENSE", "README.txt", "zellij", "zellij.zh-buildinfo.json"])
+        line = (out / "zellij-zh-x86_64-unknown-linux-musl.sha256sum").read_text(encoding="utf-8")
+        self.assertEqual(line.split()[0], hashlib.sha256(archive.read_bytes()).hexdigest())
+        self.assertTrue(line.strip().endswith(archive.name))
+
+    def test_windows_archive_has_both_binaries(self):
+        import zipfile
+        out = self.run_package("x86_64-pc-windows-msvc", True)
+        with zipfile.ZipFile(out / "zellij-zh-x86_64-pc-windows-msvc.zip") as z:
+            names = sorted(z.namelist())
+        self.assertEqual(names, ["LICENSE", "README.txt", "zellij-terminal.exe", "zellij.exe", "zellij.zh-buildinfo.json"])
+
+    def test_missing_binary_is_reported(self):
+        import argparse
+        args = argparse.Namespace(target="x86_64-unknown-linux-musl", out=tempfile.mkdtemp(),
+                                  source=tempfile.mkdtemp(), workdir=None)
+        with self.assertRaises(SystemExit):
+            zhcn.cmd_package(args)
+
+    def test_output_locations(self):
+        wd = Path("/w")
+        self.assertEqual(zhcn.build_output_dir(wd, None), Path("/w/target/release"))
+        self.assertEqual(zhcn.build_output_dir(wd, "aarch64-apple-darwin"), Path("/w/target/aarch64-apple-darwin/release"))
+        self.assertEqual(zhcn.build_output_dir(wd, "x86_64-pc-windows-msvc"), Path("/w/target/release"))
+
+
 if __name__ == "__main__":
     unittest.main()

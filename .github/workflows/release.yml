@@ -1,0 +1,111 @@
+name: release
+
+# 为各平台构建汉化版并打包。沿用上游发布流程的目标与构建方式
+# （Linux musl 与 macOS 用 `cargo xtask ci cross`，Windows 原生构建并静态链接 CRT）。
+#
+# - 手动运行（workflow_dispatch）：只构建并上传为工作流产物，用于试跑，不创建 Release。
+# - 推送形如 v0.46.0-zh.1 的 tag：构建后创建**草稿** Release，由人工核对说明后再发布。
+# 各平台的验证程度不同，请在发布说明里如实写明。
+
+on:
+  push:
+    tags:
+      - "v*-zh.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON: python
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: tool unit tests
+        run: python -m unittest discover -s tools/tests -v
+      - name: fetch upstream baseline
+        run: python tools/zhcn.py fetch
+      - name: check (baseline + patches + catalog)
+        run: python tools/zhcn.py check
+
+  build:
+    needs: check
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      RUST_BACKTRACE: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install musl-tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y --no-install-recommends musl-tools
+      - name: Install NASM (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/setup-nasm@v1
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: wasm32-wasip1,${{ matrix.target }}
+      - name: fetch upstream baseline
+        run: python tools/zhcn.py fetch
+      - name: build localized binary
+        run: python tools/zhcn.py build --target ${{ matrix.target }}
+      - name: package
+        run: python tools/zhcn.py package --target ${{ matrix.target }} --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zellij-zh-${{ matrix.target }}
+          path: dist/*
+          retention-days: 14
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: list assets
+        run: ls -la dist
+      - name: create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --draft \
+            --title "Zellij 简体中文 $GITHUB_REF_NAME" \
+            --notes-file .github/release-notes.md

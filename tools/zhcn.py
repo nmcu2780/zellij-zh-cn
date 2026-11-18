@@ -5,7 +5,8 @@
   fetch           按 upstream.toml 把上游源码取到 .work/zellij 并核对提交
   check           校验基线提交、补丁可应用性、译文目录合法性
   apply           重置工作区、git am 应用补丁、生成译文产物、刷新 assets
-  build           check + apply + cargo xtask ci build-release
+  build           check + apply + cargo xtask ci build-release（--target 交叉构建）
+  package         把某目标平台的产物打成压缩包并生成 sha256
   export-patches  把 zh-cn 分支的提交导出为补丁队列
   report          对比代码中使用的键与译文目录
   gen-rust        生成 Rust 译文目录文件
@@ -421,26 +422,128 @@ def cmd_apply(args) -> int:
     return 0
 
 
+def build_output_dir(wd: Path, target: str | None) -> Path:
+    """二进制所在目录：本机构建与 Windows 原生构建在 target/release，其余交叉构建在 target/<目标>/release。"""
+    if target is None or "windows" in target:
+        return wd / "target" / "release"
+    return wd / "target" / target / "release"
+
+
+def binary_names(target: str | None) -> list[str]:
+    windows = bool(target and "windows" in target) or (target is None and os.name == "nt")
+    if windows:
+        return ["zellij.exe", "zellij-terminal.exe"]
+    return ["zellij"]
+
+
 def cmd_build(args) -> int:
     cmd_check(args)
     cmd_apply(args)
     up = load_upstream()
     wd = workdir(args)
-    eprint(">> 开始 release 构建（cargo xtask ci build-release）")
-    res = subprocess.run(
-        cargo_cmd("xtask", "ci", "build-release"), cwd=wd, env=cargo_env()
-    )
+    target = getattr(args, "target", None)
+    env = cargo_env()
+    if target is None:
+        eprint(">> 开始 release 构建（cargo xtask ci build-release）")
+        command = cargo_cmd("xtask", "ci", "build-release")
+    elif "windows" in target:
+        # 与上游发布一致：Windows 原生构建并静态链接 CRT
+        eprint(f">> 开始 Windows 原生 release 构建（{target}）")
+        env = dict(env, RUSTFLAGS="-C target-feature=+crt-static")
+        command = cargo_cmd("xtask", "ci", "build-release")
+    else:
+        # 与上游发布一致：musl（Linux）与 macOS 走 cargo xtask ci cross
+        eprint(f">> 开始交叉构建（cargo xtask ci cross {target}）")
+        command = cargo_cmd("xtask", "ci", "cross", target)
+    res = subprocess.run(command, cwd=wd, env=env)
     if res.returncode != 0:
         raise SystemExit(f"构建失败（退出码 {res.returncode}）")
-    binary = wd / "target" / "release" / "zellij"
-    if not binary.is_file():
-        raise SystemExit(f"构建结束但未找到二进制：{binary}")
-    write_buildinfo(up, binary)
-    print(f"构建完成：{binary}")
+    out_dir = build_output_dir(wd, target)
+    binaries = [out_dir / name for name in binary_names(target)]
+    for binary in binaries:
+        if not binary.is_file():
+            raise SystemExit(f"构建结束但未找到二进制：{binary}")
+    write_buildinfo(up, binaries[0], target)
+    print(f"构建完成：{binaries[0]}")
     return 0
 
 
-def write_buildinfo(up: dict, binary: Path):
+PACKAGE_README = """Zellij 简体中文（非官方）预编译版本
+
+这是对上游 Zellij {version} 打上汉化补丁后的构建（{target}）。
+项目主页：https://github.com/nmcu2780/zellij-zh-cn
+
+使用
+  直接运行本目录里的 zellij。它与系统里已有的 zellij 互不影响；不需要安装，
+  不会修改你的配置。
+  中文界面：环境变量 ZELLIJ_LANG、LC_ALL、LC_MESSAGES、LANG 之一以 zh 开头即可
+  （例如 LANG=zh_CN.UTF-8）。Windows 默认没有这些变量，请设置 ZELLIJ_LANG=zh-CN。
+  ZELLIJ_LANG=en 可切回英文。
+  网页端：在地址后加 ?lang=zh-CN。
+
+核对
+  zellij --version 应显示 {version}。zellij.zh-buildinfo.json 记录了上游提交、补丁与
+  译文目录的哈希。sha256 校验文件与压缩包一起发布。
+
+回滚
+  删除本目录即可；系统安装与你的配置从未被修改。
+
+限制
+  只对应上游 {version}；其他版本请自行构建（见项目主页）。
+  不同系统的验证程度不同，见发布页的说明。
+"""
+
+
+def cmd_package(args) -> int:
+    """把构建产物打成压缩包并生成 sha256 校验文件（仅用标准库，跨平台）。"""
+    import hashlib
+    import tarfile
+    import zipfile
+
+    up = load_upstream()
+    wd = workdir(args)
+    target = args.target
+    out_dir = Path(args.source).resolve() if getattr(args, "source", None) else build_output_dir(wd, target)
+    names = binary_names(target)
+    for name in names:
+        if not (out_dir / name).is_file():
+            raise SystemExit(f"找不到 {out_dir / name}，请先运行 tools/zhcn.py build --target {target}")
+    info = out_dir / (names[0] + ".zh-buildinfo.json")
+    if not info.is_file():
+        raise SystemExit(f"找不到 {info}")
+    dest = Path(args.out).resolve()
+    dest.mkdir(parents=True, exist_ok=True)
+    readme = PACKAGE_README.format(version=up["version"], target=target)
+    windows = "windows" in target
+    base = f"zellij-zh-{target}"
+    archive = dest / (base + (".zip" if windows else ".tar.gz"))
+    members = [(out_dir / n, n) for n in names] + [
+        (info, "zellij.zh-buildinfo.json"),
+        (REPO_ROOT / "LICENSE", "LICENSE"),
+    ]
+    if windows:
+        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
+            for path, arc in members:
+                z.write(path, arc)
+            z.writestr("README.txt", readme)
+    else:
+        with tarfile.open(archive, "w:gz") as t:
+            for path, arc in members:
+                t.add(path, arcname=arc)
+            data = readme.encode("utf-8")
+            ti = tarfile.TarInfo("README.txt")
+            ti.size = len(data)
+            ti.mode = 0o644
+            import io
+            t.addfile(ti, io.BytesIO(data))
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    checksum = dest / (base + ".sha256sum")
+    checksum.write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
+    print(f"已生成 {archive}（sha256 {digest[:16]}…）")
+    return 0
+
+
+def write_buildinfo(up: dict, binary: Path, target: str | None = None):
     """在二进制旁写 zellij.zh-buildinfo.json，记录本次构建的基线、
     补丁与译文目录的哈希，便于核对与汇报。"""
     import datetime
@@ -455,6 +558,7 @@ def write_buildinfo(up: dict, binary: Path):
         "upstream_version": up["version"],
         "upstream_tag": up["tag"],
         "upstream_commit": up["commit"],
+        "target": target or "host",
         "patch_dir": str(pdir.relative_to(REPO_ROOT)),
         "patches": {p.name: sha256(p) for p in sorted(pdir.glob("*.patch"))},
         "catalog_sha256": sha256(CATALOG_PATH),
@@ -1140,8 +1244,16 @@ def main() -> int:
     p = sub.add_parser("build", help="check + apply + release 构建")
     p.add_argument("--force", action="store_true",
                    help="丢弃工作区未提交改动与 zh-cn 分支后重建")
+    p.add_argument("--target", help="目标平台三元组（如 x86_64-unknown-linux-musl）；不给则构建本机")
     add_workdir(p)
     p.set_defaults(fn=cmd_build)
+
+    p = sub.add_parser("package", help="把某目标平台的构建产物打包并生成 sha256")
+    p.add_argument("--target", required=True, help="目标平台三元组")
+    p.add_argument("--out", default="dist", help="输出目录（默认 dist）")
+    p.add_argument("--source", help="二进制所在目录（默认按目标平台推断）")
+    add_workdir(p)
+    p.set_defaults(fn=cmd_package)
 
     p = sub.add_parser("export-patches", help="导出 zh-cn 分支为补丁队列")
     add_workdir(p)
