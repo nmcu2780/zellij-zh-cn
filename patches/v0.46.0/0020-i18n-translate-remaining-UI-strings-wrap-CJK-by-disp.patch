@@ -11,7 +11,7 @@ Subject: [PATCH 20/20] i18n: translate remaining UI strings, wrap CJK by
 ---
  default-plugins/about/src/main.rs             |   8 +-
  default-plugins/about/src/onboarding.rs       | 115 +++-----
- default-plugins/about/src/pages.rs            |  17 +-
+ default-plugins/about/src/pages.rs            |  21 +-
  default-plugins/about/src/tips.rs             | 168 +++++-------
  default-plugins/bars/src/status_bar/mod.rs    |   5 +-
  .../bars/src/status_bar/one_line_ui.rs        |   4 +-
@@ -26,10 +26,10 @@ Subject: [PATCH 20/20] i18n: translate remaining UI strings, wrap CJK by
  .../configuration/src/settings_screen.rs      |   6 +-
  .../configuration/src/setup_screen.rs         | 169 ++++++------
  .../configuration/src/theme_sample.rs         |  33 +--
- .../configuration/src/themes_screen.rs        | 249 +++++++++++-------
+ .../configuration/src/themes_screen.rs        | 251 +++++++++++-------
  .../layout-manager/src/ui/text_utils.rs       |  37 +--
  default-plugins/multiple-select/src/main.rs   |   6 +-
- default-plugins/plugin-manager/src/main.rs    | 117 ++++----
+ default-plugins/plugin-manager/src/main.rs    | 121 +++++----
  default-plugins/prompt/src/app.rs             |   3 +-
  default-plugins/prompt/src/form.rs            |   4 +-
  default-plugins/prompt/src/ui.rs              |   9 +-
@@ -39,9 +39,11 @@ Subject: [PATCH 20/20] i18n: translate remaining UI strings, wrap CJK by
  default-plugins/session-manager/src/panel.rs  |  14 +-
  .../src/resurrectable_sessions.rs             |  21 +-
  .../session-manager/src/ui/components.rs      |  57 ++--
+ default-plugins/share/src/main.rs             |   2 +-
  default-plugins/share/src/main_screen.rs      |   6 +-
- .../share/src/token_management_screen.rs      |  52 +---
- default-plugins/share/src/token_screen.rs     |   2 +-
+ .../share/src/token_management_screen.rs      |  64 ++---
+ default-plugins/share/src/token_screen.rs     |   4 +-
+ default-plugins/share/src/ui_components.rs    |   2 +-
  default-plugins/strider/src/shared.rs         |  19 +-
  .../src/panes/nested_session_modal.rs         |  10 +-
  zellij-server/src/panes/plugin_pane.rs        |   2 +-
@@ -52,7 +54,7 @@ Subject: [PATCH 20/20] i18n: translate remaining UI strings, wrap CJK by
  zellij-tile/src/ui_components/text.rs         |  21 ++
  zellij-utils/src/desktop_integration/mod.rs   |  69 ++---
  .../src/desktop_integration/platform.rs       | 203 +++++++-------
- 43 files changed, 926 insertions(+), 935 deletions(-)
+ 45 files changed, 940 insertions(+), 949 deletions(-)
 
 diff --git a/default-plugins/about/src/main.rs b/default-plugins/about/src/main.rs
 index a429605..6c65229 100644
@@ -289,7 +291,7 @@ index ec4d4fa..69d979d 100644
  
  #[cfg(test)]
 diff --git a/default-plugins/about/src/pages.rs b/default-plugins/about/src/pages.rs
-index 990f4a8..2bc8af5 100644
+index 990f4a8..2810c73 100644
 --- a/default-plugins/about/src/pages.rs
 +++ b/default-plugins/about/src/pages.rs
 @@ -100,8 +100,7 @@ impl Page {
@@ -351,6 +353,24 @@ index 990f4a8..2bc8af5 100644
  }
  
  fn main_menu_item(item_name: &str) -> Text {
+@@ -875,7 +872,7 @@ pub enum TextOrCustomRender {
+ impl TextOrCustomRender {
+     pub fn len(&self) -> usize {
+         match self {
+-            TextOrCustomRender::Text(text) => text.len(),
++            TextOrCustomRender::Text(text) => text.width(),
+             TextOrCustomRender::CustomRender(_render_fn, len_fn) => len_fn(),
+         }
+     }
+@@ -883,7 +880,7 @@ impl TextOrCustomRender {
+         match self {
+             TextOrCustomRender::Text(text) => {
+                 print_text_with_coordinates(text.clone(), x, y, Some(columns), Some(rows));
+-                text.len()
++                text.width()
+             },
+             TextOrCustomRender::CustomRender(render_fn, _len_fn) => render_fn(x, y),
+         }
 diff --git a/default-plugins/about/src/tips.rs b/default-plugins/about/src/tips.rs
 index 14c69fa..46f16f1 100644
 --- a/default-plugins/about/src/tips.rs
@@ -2176,7 +2196,7 @@ index 9e003aa..33c7e0b 100644
          ))
          .color_range(2, ..7)
 diff --git a/default-plugins/configuration/src/themes_screen.rs b/default-plugins/configuration/src/themes_screen.rs
-index eddaceb..82216a9 100644
+index eddaceb..21da85d 100644
 --- a/default-plugins/configuration/src/themes_screen.rs
 +++ b/default-plugins/configuration/src/themes_screen.rs
 @@ -21,19 +21,22 @@ const SLOT_LABEL_WIDTH: usize = 34;
@@ -2439,6 +2459,15 @@ index eddaceb..82216a9 100644
              },
              Err(error) => {
                  if let Some(form) = self.colour_form.as_mut() {
+@@ -715,7 +755,7 @@ impl ThemesScreen {
+         self.name_form = Some(NameForm {
+             purpose,
+             input: TextInput::new(initial)
+-                .label("Name")
++                .label(tr("Name"))
+                 .label_width(6)
+                 .focused(),
+             error: None,
 @@ -734,22 +774,22 @@ impl ThemesScreen {
          }
      }
@@ -2746,7 +2775,7 @@ index f71aa36..b953875 100644
          };
  
 diff --git a/default-plugins/plugin-manager/src/main.rs b/default-plugins/plugin-manager/src/main.rs
-index 6465d49..52aaa46 100644
+index 6465d49..680778f 100644
 --- a/default-plugins/plugin-manager/src/main.rs
 +++ b/default-plugins/plugin-manager/src/main.rs
 @@ -76,8 +76,8 @@ impl NewPluginScreen {
@@ -2855,10 +2884,11 @@ index 6465d49..52aaa46 100644
              print_text_with_coordinates(text, 0, 0, None, None);
          }
      }
-@@ -894,27 +891,13 @@ impl State {
+@@ -893,28 +890,14 @@ impl State {
+             tr("Help: <←↓↑→/ENTER> - Navigate, <TAB> - Reload, <Del> - Close, <Ctrl a> - New, <ESC> - Exit");
          let short_text =
              tr("<←↓↑→/ENTER/TAB/Del> - Navigate/Expand/Reload/Close, <Ctrl a> - New, <ESC> - Exit");
-         if cols >= full_text.chars().count() {
+-        if cols >= full_text.chars().count() {
 -            let text = Text::from(full_text)
 -                .color_range(3, 5..=11)
 -                .color_range(3, 32..=38)
@@ -2866,15 +2896,17 @@ index 6465d49..52aaa46 100644
 -                .color_range(3, 65..=69)
 -                .color_range(3, 80..=87)
 -                .color_range(3, 96..=100);
++        if cols >= zellij_tile::graphemes::display_width(&full_text) {
 +            let text = Text::from(full_text).color_keys(3);
              print_text_with_coordinates(text, 0, y, Some(cols), None);
-         } else if cols >= middle_text.chars().count() {
+-        } else if cols >= middle_text.chars().count() {
 -            let text = Text::from(middle_text)
 -                .color_range(3, 6..=17)
 -                .color_range(3, 31..=35)
 -                .color_range(3, 47..=51)
 -                .color_range(3, 62..=69)
 -                .color_range(3, 78..=82);
++        } else if cols >= zellij_tile::graphemes::display_width(&middle_text) {
 +            let text = Text::from(middle_text).color_keys(3);
              print_text_with_coordinates(text, 0, y, Some(cols), None);
          } else {
@@ -3518,6 +3550,19 @@ index c365393..a25c441 100644
      let separator = " - ";
      let space = " ";
  
+diff --git a/default-plugins/share/src/main.rs b/default-plugins/share/src/main.rs
+index c600f10..6f96426 100644
+--- a/default-plugins/share/src/main.rs
++++ b/default-plugins/share/src/main.rs
+@@ -386,7 +386,7 @@ impl App {
+     fn render_no_capability_message(&self, rows: usize, cols: usize) {
+         let full_text = tr("This version of Zellij was compiled without web sharing capabilities");
+         let short_text = tr("No web server capabilities");
+-        let text = if cols >= full_text.chars().count() {
++        let text = if cols >= zellij_tile::graphemes::display_width(&full_text) {
+             full_text
+         } else {
+             short_text
 diff --git a/default-plugins/share/src/main_screen.rs b/default-plugins/share/src/main_screen.rs
 index f868523..37f641d 100644
 --- a/default-plugins/share/src/main_screen.rs
@@ -3537,9 +3582,47 @@ index f868523..37f641d 100644
          print_text_with_coordinates(help_text, x, y, None, None);
      }
 diff --git a/default-plugins/share/src/token_management_screen.rs b/default-plugins/share/src/token_management_screen.rs
-index f07bd09..e329296 100644
+index f07bd09..879e2a1 100644
 --- a/default-plugins/share/src/token_management_screen.rs
 +++ b/default-plugins/share/src/token_management_screen.rs
+@@ -163,13 +163,13 @@ impl<'a> TokenManagementScreen<'a> {
+             created_at.to_string()
+         };
+ 
+-        if full_text.chars().count() <= max_width {
++        if zellij_tile::graphemes::display_width(&full_text) <= max_width {
+             return full_text;
+         }
+ 
+         // If we can't fit tr("issued on"), use the date
+-        if !include_issued_prefix || created_at.chars().count() <= max_width {
+-            if created_at.chars().count() <= max_width {
++        if !include_issued_prefix || zellij_tile::graphemes::display_width(&created_at) <= max_width {
++            if zellij_tile::graphemes::display_width(&created_at) <= max_width {
+                 return created_at.to_string();
+             }
+ 
+@@ -194,7 +194,7 @@ impl<'a> TokenManagementScreen<'a> {
+         };
+         let short_text = if is_read_only { "RO" } else { "RW" };
+ 
+-        let text = if full_text.chars().count() <= max_width {
++        let text = if zellij_tile::graphemes::display_width(&full_text) <= max_width {
+             full_text
+         } else {
+             short_text
+@@ -226,9 +226,9 @@ impl<'a> TokenManagementScreen<'a> {
+         let full_controls = tr("(<x> revoke, <r> rename)");
+         let short_controls = "(<x>, <r>)";
+ 
+-        if full_controls.chars().count() <= max_width {
++        if zellij_tile::graphemes::display_width(&full_controls) <= max_width {
+             full_controls.to_string()
+-        } else if short_controls.chars().count() <= max_width {
++        } else if zellij_tile::graphemes::display_width(&short_controls) <= max_width {
+             // Pad the short controls to fill the available width
+             let padding = max_width - short_controls.chars().count();
+             format!("{}{}", short_controls, " ".repeat(padding))
 @@ -449,21 +449,10 @@ impl<'a> TokenManagementScreen<'a> {
          let controls_text = self.format_controls(column_widths.controls, true);
  
@@ -3621,9 +3704,18 @@ index f07bd09..e329296 100644
          (text.to_string(), help_line)
      }
 diff --git a/default-plugins/share/src/token_screen.rs b/default-plugins/share/src/token_screen.rs
-index d29e7b4..c09eb2f 100644
+index d29e7b4..7c7217a 100644
 --- a/default-plugins/share/src/token_screen.rs
 +++ b/default-plugins/share/src/token_screen.rs
+@@ -46,7 +46,7 @@ struct TextVariant {
+ 
+ impl TextVariant {
+     fn select(&self, cols: usize) -> &'static str {
+-        if cols >= self.long.chars().count() {
++        if cols >= zellij_tile::graphemes::display_width(&self.long) {
+             self.long
+         } else {
+             self.short
 @@ -125,7 +125,7 @@ impl TokenScreen {
              })
              .collect();
@@ -3633,6 +3725,19 @@ index d29e7b4..c09eb2f 100644
  
          ScreenElements {
              token: token_element,
+diff --git a/default-plugins/share/src/ui_components.rs b/default-plugins/share/src/ui_components.rs
+index b799b65..96bff23 100644
+--- a/default-plugins/share/src/ui_components.rs
++++ b/default-plugins/share/src/ui_components.rs
+@@ -183,7 +183,7 @@ fn get_text_with_fallback(
+     short_text: &'static str,
+     max_width: usize,
+ ) -> &'static str {
+-    if full_text.chars().count() <= max_width {
++    if zellij_tile::graphemes::display_width(&full_text) <= max_width {
+         full_text
+     } else {
+         short_text
 diff --git a/default-plugins/strider/src/shared.rs b/default-plugins/strider/src/shared.rs
 index 293b790..a287438 100644
 --- a/default-plugins/strider/src/shared.rs
